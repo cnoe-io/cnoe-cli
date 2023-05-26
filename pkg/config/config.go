@@ -1,63 +1,64 @@
 package config
 
-type Configuration struct {
-	ApiVersion string   `yaml:"apiVersion"`
-	Kind       string   `yaml:"kind"`
-	Metadata   Metadata `yaml:"metadata"`
-	Spec       Spec     `yaml:"spec"`
+import (
+	"fmt"
+	"os"
+	"strings"
+
+	"github.com/knadh/koanf/parsers/yaml"
+	"github.com/knadh/koanf/providers/env"
+	"github.com/knadh/koanf/providers/file"
+	"github.com/knadh/koanf/v2"
+)
+
+var (
+	EnvPrefix = "CNOE_"
+	Delimiter = "."
+)
+
+func Parse(f string) (Configuration, error) {
+	k := koanf.New(Delimiter)
+
+	err := parseConfigFile(k, f)
+	if err != nil {
+		return Configuration{}, err
+	}
+	err = parseEnv(k)
+	if err != nil {
+		return Configuration{}, err
+	}
+	var out Configuration
+	err = k.Unmarshal("", &out)
+	return out, nil
 }
 
-type Metadata struct {
-	Name        string            `yaml:"name"`
-	Labels      map[string]string `yaml:"labels"`
-	Annotations map[string]string `yaml:"annotations"`
+func parseConfigFile(k *koanf.Koanf, f string) error {
+	info, err := os.Stat(f)
+	if err != nil {
+		return err
+	}
+	if info.IsDir() {
+		return fmt.Errorf("give path must be a file. Given path: %s", f)
+	}
+	err = k.Load(file.Provider(f), yaml.Parser())
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
-type Spec struct {
-	Target     Target       `yaml:"target"`
-	Distro     Distro       `yaml:"distro"`
-	Blueprints []Blueprints `yaml:"blueprints"`
-	Auth       Auth         `yaml:"auth"`
+func parseEnv(k *koanf.Koanf) error {
+	err := k.Load(env.ProviderWithValue(EnvPrefix, Delimiter, envParser), nil)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
-type Blueprints struct {
-	Path    string `yaml:"path"`
-	Version string `yaml:"version"`
-	Type    string `yaml:"type"`
-	Name    string `yaml:"name"`
-}
-
-type OidcRef struct {
-	Name      string `yaml:"name"`
-	Namespace string `yaml:"namespace"`
-}
-
-type Oidc struct {
-	ClientId     string `yaml:"clientId"`
-	ClientSecret string `yaml:"clientSecret"`
-	Callback     string `yaml:"callback"`
-}
-
-type Auth struct {
-	Enabled bool    `yaml:"enabled"`
-	Oidc    Oidc    `yaml:"oidc"`
-	OidcRef OidcRef `yaml:"oidcRef"`
-	Domain  Domain  `yaml:"domain"`
-}
-
-type Domain struct {
-	PortalBase string `yaml:"portalBase"`
-}
-
-type Target struct {
-	Kubernetes Kubernetes `yaml:"kubernetes"`
-}
-
-type Kubernetes struct {
-	Context string `yaml:"context"`
-}
-
-type Distro struct {
-	Version    string   `yaml:"version"`
-	Components []string `yaml:"components"`
+func envParser(k string, v string) (string, interface{}) {
+	key := strings.Replace(strings.ToLower(strings.TrimPrefix(k, EnvPrefix)), "_", Delimiter, -1)
+	if strings.Contains(v, " ") {
+		return key, strings.Split(v, " ")
+	}
+	return key, v
 }

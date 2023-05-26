@@ -1,0 +1,18 @@
+apiVersion: cnoe.io/v1alpha1
+kind: Configuration
+metadata:
+  name: my-config
+  labels:
+    my: labels
+spec:
+  packaging: kustomize
+  target:
+    kubernetes:
+      context: my-context
+  distro:
+    version: v0.0.1
+    components:
+      - flux
+      - TF
+      - Backstage
+
