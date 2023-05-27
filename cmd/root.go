@@ -41,7 +41,6 @@ func init() {
 	log = klog.NewKlogr()
 	cobra.OnInitialize(initConfig)
 	rootCmd.PersistentFlags().StringVarP(&cfgFile, "config", "f", "./cnoe.yaml", "config file path")
-
 }
 
 func initConfig() {
