@@ -4,8 +4,7 @@ Copyright © 2023 NAME HERE <EMAIL ADDRESS>
 package cmd
 
 import (
-	"fmt"
-
+	"github.com/cnoe-io/cnoe-cli/pkg/render"
 	"github.com/spf13/cobra"
 )
 
@@ -14,7 +13,7 @@ var installCmd = &cobra.Command{
 	Use:   "install",
 	Short: "A brief description of your command",
 	Long:  ``,
-	Run:   Run,
+	RunE:  Run,
 }
 
 func init() {
@@ -30,6 +29,11 @@ func init() {
 	// installCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
 }
 
-func Run(cmd *cobra.Command, args []string) {
-	fmt.Println(conf.Spec)
+func Run(cmd *cobra.Command, args []string) error {
+	renderer, err := render.NewDefaultRenderer(conf)
+	if err != nil {
+		return err
+	}
+	cnoe := cnoeCmd{renderer: renderer}
+	return cnoe.install(cmd.Context())
 }

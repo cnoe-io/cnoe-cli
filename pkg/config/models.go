@@ -59,6 +59,13 @@ type Kubernetes struct {
 }
 
 type Distro struct {
-	Version    string   `yaml:"version"`
-	Components []string `yaml:"components"`
+	Version    string      `yaml:"version"`
+	Components []Component `yaml:"components"`
+}
+
+type Component struct {
+	Name      string      `yaml:"name"`
+	Path      string      `yaml:"path"`
+	DependsOn []Component `yaml:"dependsOn"`
+	EnvVars   string      `yaml:"envVars"`
 }

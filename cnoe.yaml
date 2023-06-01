@@ -12,7 +12,6 @@ spec:
   distro:
     version: v0.0.1
     components:
-      - flux
-      - TF
-      - Backstage
-
+      - name: flux
+        path: ./package/flux/dev
+#      - Keycloak
