@@ -9,8 +9,14 @@ import (
 	"gonum.org/v1/gonum/graph/topo"
 )
 
+var (
+	CNOEDir          = ".cnoe"
+	CNOEManifestsDir = "manifests"
+)
+
 type Component interface {
 	ID() int64
+	Name() string
 	Dependencies() []int64
 	Render(ctx context.Context) error
 	Install(ctx context.Context) error
@@ -97,4 +103,10 @@ func Sort(components map[int64]Component) ([]Component, error) {
 		out[i] = components[nodes[i].ID()]
 	}
 	return out, nil
+}
+
+func manifestPath(component Component) string {
+	return fmt.Sprintf("%s/%s/%d-%s.yaml",
+		CNOEDir, CNOEManifestsDir, component.ID(), component.Name(),
+	)
 }

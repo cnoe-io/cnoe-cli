@@ -10,22 +10,23 @@ import (
 )
 
 type Kustomize struct {
-	Id        int64
-	Path      string
-	Name      string
-	Deps      []int64
-	Env       map[string]string
-	executor  k8sexec.Interface
-	ExecPath  string
-	manifests []byte
-	version   string
+	Path     string
+	Deps     []int64
+	Env      map[string]string
+	executor k8sexec.Interface
+	ExecPath string
+	version  string
+	name     string
+	id       int64
 }
 
 func newKustomize(component config.Component, id int64) *Kustomize {
 	return &Kustomize{
-		Path: component.Path,
-		Id:   id,
-		Deps: make([]int64, len(component.DependsOn)),
+		name:     component.Name,
+		Path:     component.Path,
+		id:       id,
+		Deps:     make([]int64, len(component.DependsOn)),
+		executor: k8sexec.New(),
 	}
 }
 
@@ -52,7 +53,11 @@ func NewKustomizeComponents(config config.Configuration) (map[int64]Component, e
 }
 
 func (c *Kustomize) ID() int64 {
-	return c.Id
+	return c.id
+}
+
+func (c *Kustomize) Name() string {
+	return c.name
 }
 
 func (c *Kustomize) Dependencies() []int64 {
@@ -60,22 +65,18 @@ func (c *Kustomize) Dependencies() []int64 {
 }
 
 func (c *Kustomize) Render(ctx context.Context) error {
-	output, err := c.execKustomizeInstall(ctx)
+	output, err := c.execKustomizeBuild(ctx)
 	if err != nil {
-		return err
+		return fmt.Errorf("%w : %s", err, output)
 	}
-	c.manifests = output
-	return nil
+	return os.WriteFile(manifestPath(c), output, 0640)
 }
 
 func (c *Kustomize) Install(ctx context.Context) error {
-	if c.manifests == nil || len(c.manifests) == 0 {
-		return fmt.Errorf("package was not rendered. path: %s, package: %s", c.Path, c.Name)
-	}
 	return nil
 }
 
-func (c *Kustomize) execKustomizeInstall(ctx context.Context) ([]byte, error) {
+func (c *Kustomize) execKustomizeBuild(ctx context.Context) ([]byte, error) {
 	kustomizeCmd, err := c.setup(ctx, "build")
 	if err != nil {
 		return nil, err
@@ -90,5 +91,5 @@ func (c *Kustomize) setup(ctx context.Context, args ...string) (k8sexec.Cmd, err
 			return nil, err
 		}
 	}
-	return c.executor.CommandContext(ctx, "kustomize", append(args, c.Path)...), nil
+	return c.executor.CommandContext(context.Background(), "kustomize", append(args, c.Path)...), nil
 }
