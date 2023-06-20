@@ -1,0 +1,12 @@
+config:
+  operators:
+  - name: spark
+    pods:
+    - name: argocd
+    crds:
+    - group: sparkoperator.k8s.io
+      kind: SparkApplication
+      version: v1beta2
+    - group: acme.cert-manager.io
+      kind: Challenges
+      version: v1
