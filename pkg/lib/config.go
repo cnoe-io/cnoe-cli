@@ -18,7 +18,5 @@ type Operator struct {
 }
 
 type Config struct {
-	Config struct {
-		Operators []Operator `yaml:"operators"`
-	} `yaml:"config"`
+	Prerequisits []Operator `yaml:"prerequisits"`
 }

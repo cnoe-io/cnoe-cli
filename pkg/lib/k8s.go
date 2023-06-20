@@ -14,15 +14,21 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 )
 
+//go:generate go run github.com/maxbrunsfeld/counterfeiter/v6 . IK8sClient
+type IK8sClient interface {
+	Pods(namespace string) (*corev1.PodList, error)
+	CRDs(group, kind, version string) (*unstructured.UnstructuredList, error)
+}
+
 type k8sClient struct {
 	clientset     *kubernetes.Clientset
 	dynamicclient *dynamic.DynamicClient
 }
 
-func NewK8sClient(kubeconfig string) (k8sClient, error) {
+func NewK8sClient(kubeconfig string) (IK8sClient, error) {
 	config, err := clientcmd.BuildConfigFromFlags("", kubeconfig)
 	if err != nil {
-		return k8sClient{}, err
+		return &k8sClient{}, err
 	}
 
 	// Create the Kubernetes clientset
