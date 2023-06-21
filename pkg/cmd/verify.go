@@ -8,6 +8,7 @@ import (
 	"github.com/cnoe-io/cnoe-cli/pkg/lib"
 	"github.com/fatih/color"
 	"github.com/spf13/cobra"
+	v1 "k8s.io/api/core/v1"
 )
 
 const (
@@ -71,7 +72,11 @@ func Verify(stdout, stderr io.Writer, cli lib.IK8sClient, config lib.Config) err
 
 				if strings.Contains(p.GetName(), pid.Name) {
 					found = true
-					fmt.Fprintf(stdout, "%s %s, Pod=%s\n", green("✓"), p.GetNamespace(), p.GetName())
+					if p.Status.Phase == v1.PodRunning {
+						fmt.Fprintf(stdout, "%s %s, Pod=%s - %s\n", green("✓"), p.GetNamespace(), p.GetName(), p.Status.Phase)
+					} else {
+						fmt.Fprintf(stdout, "%s %s, Pod=%s - %s\n", red("X"), p.GetNamespace(), p.GetName(), p.Status.Phase)
+					}
 				}
 			}
 

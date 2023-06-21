@@ -1,7 +1,9 @@
 prerequisits:
 - name: spark
   pods:
-  - name: argocd
+  - name: argo
+    # bubble up whether or not the pod is ready
+    # support regex
   crds:
   - group: sparkoperator.k8s.io
     kind: SparkApplication

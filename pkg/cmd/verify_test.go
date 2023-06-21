@@ -88,8 +88,9 @@ var _ = Describe("Verify", func() {
 	})
 
 	Context("when verifying a Pod", func() {
+		var podList *corev1.PodList
 		BeforeEach(func() {
-			podList := &corev1.PodList{
+			podList = &corev1.PodList{
 				Items: []corev1.Pod{
 					{
 						ObjectMeta: metav1.ObjectMeta{
@@ -124,17 +125,44 @@ var _ = Describe("Verify", func() {
 				}
 			})
 
-			It("successfully verifies matching pods", func() {
-				err := cmd.Verify(stdout, stderr, fakeK8sClient, *cfg)
-				Expect(err).NotTo(HaveOccurred())
-				Expect(string(stdout.Contents())).To(ContainSubstring("✓"))
+			Context("when Running", func() {
+				BeforeEach(func() {
+					podList.Items[0].Status.Phase = corev1.PodRunning
+					podList.Items[1].Status.Phase = corev1.PodRunning
+				})
 
-				splitString := strings.Split(strings.Trim(string(stdout.Contents()), "\n"), "\n")
-				Expect(splitString).To(HaveLen(2))
-				Expect(splitString).Should(ConsistOf(
-					ContainSubstring("ns1, Pod=test-pod-1"),
-					ContainSubstring("ns2, Pod=test-pod-2"),
-				))
+				It("successfully verifies matching pods", func() {
+					err := cmd.Verify(stdout, stderr, fakeK8sClient, *cfg)
+					Expect(err).NotTo(HaveOccurred())
+					Expect(string(stdout.Contents())).To(ContainSubstring("✓"))
+
+					splitString := strings.Split(strings.Trim(string(stdout.Contents()), "\n"), "\n")
+					Expect(splitString).To(HaveLen(2))
+					Expect(splitString).Should(ConsistOf(
+						ContainSubstring("ns1, Pod=test-pod-1 - Running"),
+						ContainSubstring("ns2, Pod=test-pod-2 - Running"),
+					))
+				})
+			})
+
+			Context("when Failed", func() {
+				BeforeEach(func() {
+					podList.Items[0].Status.Phase = corev1.PodFailed
+					podList.Items[1].Status.Phase = corev1.PodFailed
+				})
+
+				It("indicates that the pod failed", func() {
+					err := cmd.Verify(stdout, stderr, fakeK8sClient, *cfg)
+					Expect(err).NotTo(HaveOccurred())
+					Expect(string(stdout.Contents())).To(ContainSubstring("X"))
+
+					splitString := strings.Split(strings.Trim(string(stdout.Contents()), "\n"), "\n")
+					Expect(splitString).To(HaveLen(2))
+					Expect(splitString).Should(ConsistOf(
+						ContainSubstring("ns1, Pod=test-pod-1 - Failed"),
+						ContainSubstring("ns2, Pod=test-pod-2 - Failed"),
+					))
+				})
 			})
 		})
 
@@ -155,15 +183,37 @@ var _ = Describe("Verify", func() {
 				}
 			})
 
-			It("successfully verifies matching pods", func() {
-				err := cmd.Verify(stdout, stderr, fakeK8sClient, *cfg)
-				Expect(err).NotTo(HaveOccurred())
-				Expect(string(stdout.Contents())).To(ContainSubstring("✓"))
+			Context("when Running", func() {
+				BeforeEach(func() {
+					podList.Items[0].Status.Phase = corev1.PodRunning
+				})
+				It("successfully verifies matching pods", func() {
+					err := cmd.Verify(stdout, stderr, fakeK8sClient, *cfg)
+					Expect(err).NotTo(HaveOccurred())
+					Expect(string(stdout.Contents())).To(ContainSubstring("✓"))
 
-				splitString := strings.Split(strings.Trim(string(stdout.Contents()), "\n"), "\n")
-				Expect(splitString).To(HaveLen(1))
-				Expect(splitString).Should(ConsistOf(ContainSubstring("ns1, Pod=test-pod-1")))
-				Expect(splitString).ShouldNot(ConsistOf(ContainSubstring("ns2, Pod=test-pod-2")))
+					splitString := strings.Split(strings.Trim(string(stdout.Contents()), "\n"), "\n")
+					Expect(splitString).To(HaveLen(1))
+					Expect(splitString).Should(ConsistOf(ContainSubstring("ns1, Pod=test-pod-1 - Running")))
+					Expect(splitString).ShouldNot(ConsistOf(ContainSubstring("ns2, Pod=test-pod-2")))
+				})
+			})
+
+			Context("when Failed", func() {
+				BeforeEach(func() {
+					podList.Items[0].Status.Phase = corev1.PodFailed
+				})
+
+				It("fails verify", func() {
+					err := cmd.Verify(stdout, stderr, fakeK8sClient, *cfg)
+					Expect(err).NotTo(HaveOccurred())
+					Expect(string(stdout.Contents())).To(ContainSubstring("X"))
+
+					splitString := strings.Split(strings.Trim(string(stdout.Contents()), "\n"), "\n")
+					Expect(splitString).To(HaveLen(1))
+					Expect(splitString).Should(ConsistOf(ContainSubstring("ns1, Pod=test-pod-1 - Failed")))
+					Expect(splitString).ShouldNot(ConsistOf(ContainSubstring("ns2, Pod=test-pod-2")))
+				})
 			})
 		})
 
