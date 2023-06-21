@@ -1,24 +1,16 @@
 package cmd
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"strings"
 
 	"github.com/cnoe-io/cnoe-cli/pkg/lib"
 	"github.com/fatih/color"
+	"github.com/hashicorp/go-multierror"
 	"github.com/spf13/cobra"
 	v1 "k8s.io/api/core/v1"
-)
-
-const (
-	defDir  = "aws-resources"
-	KindXRD = "CompositeResourceDefinition"
-	KindCRD = "CustomResourceDefinition"
-)
-
-var (
-	component string
 )
 
 func init() {
@@ -27,10 +19,12 @@ func init() {
 
 var (
 	verifyCmd = &cobra.Command{
-		Use:   "verify",
-		Short: "verify if the deployment exists",
-		Long:  `verify if the required resources and controllers are working as expected`,
-		RunE:  verify,
+		Use:           "verify",
+		Short:         "verify if the deployment exists",
+		Long:          `verify if the required resources and controllers are working as expected`,
+		RunE:          verify,
+		SilenceUsage:  true,
+		SilenceErrors: true,
 	}
 )
 
@@ -44,6 +38,8 @@ func verify(cmd *cobra.Command, args []string) error {
 }
 
 func Verify(stdout, stderr io.Writer, cli lib.IK8sClient, config lib.Config) error {
+	var result error
+
 	red := color.New(color.FgRed).SprintFunc()
 	green := color.New(color.FgGreen).SprintFunc()
 
@@ -52,6 +48,7 @@ func Verify(stdout, stderr io.Writer, cli lib.IK8sClient, config lib.Config) err
 			list, err := cli.CRDs(crd.Group, crd.Kind, crd.Version)
 			if err != nil {
 				fmt.Fprintf(stdout, "%s %s/%s, Kind=%s\n", red("X"), crd.Group, crd.Version, crd.Kind)
+				result = multierror.Append(result, errors.New(fmt.Sprintf("%s/%s, Kind=%s not found", crd.Group, crd.Version, crd.Kind)))
 				continue
 			}
 
@@ -61,7 +58,7 @@ func Verify(stdout, stderr io.Writer, cli lib.IK8sClient, config lib.Config) err
 		pods, err := cli.Pods("")
 		for _, pid := range op.Pods {
 			if err != nil {
-				return err
+				return multierror.Append(result, err)
 			}
 
 			found := false
@@ -76,15 +73,17 @@ func Verify(stdout, stderr io.Writer, cli lib.IK8sClient, config lib.Config) err
 						fmt.Fprintf(stdout, "%s %s, Pod=%s - %s\n", green("✓"), p.GetNamespace(), p.GetName(), p.Status.Phase)
 					} else {
 						fmt.Fprintf(stdout, "%s %s, Pod=%s - %s\n", red("X"), p.GetNamespace(), p.GetName(), p.Status.Phase)
+						result = multierror.Append(result, errors.New(fmt.Sprintf("%s, Pod=%s failed", p.GetNamespace(), p.GetName())))
 					}
 				}
 			}
 
 			if !found {
 				fmt.Fprintf(stdout, "%s %s Pod=%s\n", red("X"), pid.Namespace, pid.Name)
+				result = multierror.Append(result, errors.New(fmt.Sprintf("%s Pod=%s not found", pid.Namespace, pid.Name)))
 			}
 		}
 	}
 
-	return nil
+	return result
 }

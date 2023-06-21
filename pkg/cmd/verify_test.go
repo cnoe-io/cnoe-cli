@@ -79,7 +79,7 @@ var _ = Describe("Verify", func() {
 
 			It("indicate that the CRD does not exist", func() {
 				err := cmd.Verify(stdout, stderr, fakeK8sClient, *cfg)
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).To(HaveOccurred())
 
 				Expect(string(stdout.Contents())).To(ContainSubstring("X"))
 				Expect(string(stdout.Contents())).To(ContainSubstring("test-group/test-version, Kind=test-kind"))
@@ -153,9 +153,9 @@ var _ = Describe("Verify", func() {
 
 				It("indicates that the pod failed", func() {
 					err := cmd.Verify(stdout, stderr, fakeK8sClient, *cfg)
-					Expect(err).NotTo(HaveOccurred())
-					Expect(string(stdout.Contents())).To(ContainSubstring("X"))
+					Expect(err).To(HaveOccurred())
 
+					Expect(string(stdout.Contents())).To(ContainSubstring("X"))
 					splitString := strings.Split(strings.Trim(string(stdout.Contents()), "\n"), "\n")
 					Expect(splitString).To(HaveLen(2))
 					Expect(splitString).Should(ConsistOf(
@@ -206,7 +206,8 @@ var _ = Describe("Verify", func() {
 
 				It("fails verify", func() {
 					err := cmd.Verify(stdout, stderr, fakeK8sClient, *cfg)
-					Expect(err).NotTo(HaveOccurred())
+					Expect(err).To(HaveOccurred())
+
 					Expect(string(stdout.Contents())).To(ContainSubstring("X"))
 
 					splitString := strings.Split(strings.Trim(string(stdout.Contents()), "\n"), "\n")
@@ -235,7 +236,7 @@ var _ = Describe("Verify", func() {
 
 			It("indicate that the Pod does not exist", func() {
 				err := cmd.Verify(stdout, stderr, fakeK8sClient, *cfg)
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).To(HaveOccurred())
 
 				Expect(string(stdout.Contents())).To(ContainSubstring("X"))
 				Expect(string(stdout.Contents())).To(ContainSubstring("Pod=non-existing-pod"))

@@ -4,6 +4,7 @@ go 1.19
 
 require (
 	github.com/fatih/color v1.15.0
+	github.com/hashicorp/go-multierror v1.1.1
 	github.com/maxbrunsfeld/counterfeiter/v6 v6.6.2
 	github.com/onsi/ginkgo/v2 v2.9.7
 	github.com/onsi/gomega v1.27.8
@@ -29,6 +30,7 @@ require (
 	github.com/google/gofuzz v1.1.0 // indirect
 	github.com/google/pprof v0.0.0-20210720184732-4bb14d4b1be1 // indirect
 	github.com/google/uuid v1.3.0 // indirect
+	github.com/hashicorp/errwrap v1.0.0 // indirect
 	github.com/imdario/mergo v0.3.6 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/josharian/intern v1.0.0 // indirect
