@@ -1,0 +1,11 @@
+apiVersion: cnoe.io/v1alpha1
+kind: Prerequisit
+metadata:
+  name: spark
+spec:
+  pods:
+  - name: spark-operator
+  crds:
+  - group: sparkoperator.k8s.io
+    kind: SparkApplication
+    version: v1beta2

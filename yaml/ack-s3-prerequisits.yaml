@@ -1,0 +1,24 @@
+apiVersion: cnoe.io/v1alpha1
+kind: Prerequisit
+metadata:
+  name: ack-s3
+spec:
+  pods:
+  - name: ack-release-s3
+    namespace: ack-system
+  crds:
+  - group: s3.services.k8s.aws
+    version: v1alpha1
+    kind: Buckets
+  - group: acme.cert-manager.io
+    kind: Challenges
+    version: v1
+  - group: services.k8s.aws
+    kind: AdoptedResources
+    version: v1alpha1
+  - group: services.k8s.aws
+    kind: FieldExports
+    version: v1alpha1
+  - group: vpcresources.k8s.aws
+    kind: SecurityGroupPolicies
+    version: v1beta1

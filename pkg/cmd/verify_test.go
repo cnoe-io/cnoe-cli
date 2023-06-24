@@ -23,7 +23,7 @@ var _ = Describe("Verify", func() {
 
 	var (
 		fakeK8sClient *libfakes.FakeIK8sClient
-		cfg           *lib.Config
+		cfg           *[]lib.Config
 		stdout        *gbytes.Buffer
 		stderr        *gbytes.Buffer
 	)
@@ -34,12 +34,41 @@ var _ = Describe("Verify", func() {
 		fakeK8sClient = &libfakes.FakeIK8sClient{}
 	})
 
+	Context("when apiVersion not matching", func() {
+		BeforeEach(func() {
+			cfg = &[]lib.Config{{}}
+		})
+
+		It("indicate that apiVersion is not matching", func() {
+			err := cmd.Verify(stdout, stderr, fakeK8sClient, *cfg)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("apiVersion not matching"))
+		})
+	})
+
+	Context("when name is missing", func() {
+		BeforeEach(func() {
+			cfg = &[]lib.Config{{
+				ApiVersion: "cnoe.io/v1alpha1",
+			}}
+		})
+
+		It("indicate that apiVersion is not matching", func() {
+			err := cmd.Verify(stdout, stderr, fakeK8sClient, *cfg)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("missing metadata.name"))
+		})
+	})
+
 	Context("when verifying a CRD", func() {
 		BeforeEach(func() {
-			cfg = &lib.Config{
-				Prerequisits: []lib.Operator{
-					{
-						Name: "test operator",
+			cfg = &[]lib.Config{
+				{
+					ApiVersion: "cnoe.io/v1alpha1",
+					Metadata: lib.Metadata{
+						Name: "test-prereq",
+					},
+					Spec: lib.Spec{
 						Crds: []lib.CRD{
 							{
 								Group:   "test-group",
@@ -111,10 +140,13 @@ var _ = Describe("Verify", func() {
 
 		Context("when the Pod exists without a namespace", func() {
 			BeforeEach(func() {
-				cfg = &lib.Config{
-					Prerequisits: []lib.Operator{
-						{
-							Name: "test operator",
+				cfg = &[]lib.Config{
+					{
+						ApiVersion: "cnoe.io/v1alpha1",
+						Metadata: lib.Metadata{
+							Name: "test-prereq",
+						},
+						Spec: lib.Spec{
 							Pods: []lib.Pod{
 								{
 									Name: "test-pod",
@@ -168,10 +200,13 @@ var _ = Describe("Verify", func() {
 
 		Context("when the Pod exists with a namespace", func() {
 			BeforeEach(func() {
-				cfg = &lib.Config{
-					Prerequisits: []lib.Operator{
-						{
-							Name: "test operator",
+				cfg = &[]lib.Config{
+					{
+						ApiVersion: "cnoe.io/v1alpha1",
+						Metadata: lib.Metadata{
+							Name: "test-prereq",
+						},
+						Spec: lib.Spec{
 							Pods: []lib.Pod{
 								{
 									Name:      "test-pod",
@@ -220,10 +255,13 @@ var _ = Describe("Verify", func() {
 
 		Context("when the Pod does not exist", func() {
 			BeforeEach(func() {
-				cfg = &lib.Config{
-					Prerequisits: []lib.Operator{
-						{
-							Name: "test operator",
+				cfg = &[]lib.Config{
+					{
+						ApiVersion: "cnoe.io/v1alpha1",
+						Metadata: lib.Metadata{
+							Name: "test-prereq",
+						},
+						Spec: lib.Spec{
 							Pods: []lib.Pod{
 								{
 									Name: "non-existing-pod",

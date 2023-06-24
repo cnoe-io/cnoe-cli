@@ -11,12 +11,20 @@ type Pod struct {
 	Namespace string `yaml:"namespace"`
 }
 
-type Operator struct {
-	Name string `yaml:"name"`
-	Crds []CRD  `yaml:"crds"`
-	Pods []Pod  `yaml:"pods"`
+type Spec struct {
+	Crds []CRD `yaml:"crds"`
+	Pods []Pod `yaml:"pods"`
 }
 
 type Config struct {
-	Prerequisits []Operator `yaml:"prerequisits"`
+	ApiVersion string   `yaml:"apiVersion"`
+	Kind       string   `yaml:"kind"`
+	Metadata   Metadata `yaml:"metadata",required`
+	Spec       Spec     `yaml:"spec"`
+}
+
+type Metadata struct {
+	Name        string            `yaml:"name",required`
+	Labels      map[string]string `yaml:"labels"`
+	Annotations map[string]string `yaml:"annotations"`
 }
