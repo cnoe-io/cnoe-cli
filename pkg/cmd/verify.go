@@ -4,14 +4,12 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"strings"
 
 	"github.com/cnoe-io/cnoe-cli/pkg/lib"
 	"github.com/fatih/color"
 	"github.com/hashicorp/go-multierror"
 	"github.com/spf13/cobra"
-	"gopkg.in/yaml.v2"
 	v1 "k8s.io/api/core/v1"
 )
 
@@ -21,7 +19,6 @@ const (
 )
 
 var (
-	configs     []lib.Config
 	configPaths []string
 
 	verifyCmd = &cobra.Command{
@@ -47,18 +44,9 @@ func verify(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	for _, configPath := range configPaths {
-		yamlFile, err := ioutil.ReadFile(configPath)
-		if err != nil {
-			return err
-		}
-
-		var config lib.Config
-		err = yaml.Unmarshal(yamlFile, &config)
-		if err != nil {
-			return err
-		}
-		configs = append(configs, config)
+	configs, err := load()
+	if err != nil {
+		return err
 	}
 
 	return Verify(cmd.OutOrStdout(), cmd.OutOrStderr(), cli, configs)
