@@ -1,0 +1,66 @@
+# This template uses $yaml special keys to include objects from different files. For this to work, the catalog type must be "url". Specifically, it must be http, e.g. Using something like file://abc/def/template-add-aws-resources.yaml does not work. 
+apiVersion: scaffolder.backstage.io/v1beta3
+kind: Template
+metadata:
+  name: add-aws-resources
+  title: Add AWS resources
+  description: Adds a AWS resource to your repo and application
+spec:
+  owner: guest
+  type: service
+  # these are the steps which are rendered in the frontend with the form input
+  parameters:
+    - title: Choose AWS Resources
+      description: Select a AWS resource to add to your repository.
+      properties:
+        path:
+          type: string
+          description: path to place this file into
+          default: kustomize/base
+        name:
+          type: string
+          description: name of this resource. This will be the name of K8s object.
+      required:
+        - awsResources
+        - name
+    - title: Choose your repository location
+      required:
+        - repoUrl
+      properties:
+        repoUrl:
+          title: Repository Location
+          type: string
+          ui:field: RepoUrlPicker
+          ui:options:
+            allowedHosts:
+              - github.com
+            allowedOwners:
+              - manabuOrg
+              - nimakaviani
+  steps:
+    - id: serialize
+      name: serialize
+      action: roadiehq:utils:serialize:yaml
+      input:
+        data:
+          apiVersion: awsblueprints.io/v1alpha1
+          kind: ${{ parameters.awsResources }}
+          metadata:
+            name: ${{ parameters.name }}
+          spec: ${{ parameters.config }}
+    - id: write
+      name: write-to-file
+      action: roadiehq:utils:fs:write
+      input:
+        path: ${{ parameters.path }}/${{ parameters.name }}.yaml
+        content: ${{ steps['serialize'].output.serialized }}
+    - id: pullRequest
+      name: create-PR
+      action: publish:github:pull-request
+      input:
+        repoUrl: ${{ parameters.repoUrl }}
+        branchName: ${{ parameters.name }}-${{ parameters.awsResources}}-${{ user.entity.metadata.name }}
+        title: Add ${{ parameters.awsResources}}
+        description: Add ${{ parameters.awsResources}}
+        sourcePath: ./
+

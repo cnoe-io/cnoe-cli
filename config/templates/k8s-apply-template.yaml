@@ -1,0 +1,43 @@
+# This template uses $yaml special keys to include objects from different files. For this to work, the catalog type must be "url". Specifically, it must be http, e.g. Using something like file://abc/def/template-add-aws-resources.yaml does not work. 
+apiVersion: scaffolder.backstage.io/v1beta3
+kind: Template
+metadata:
+  name: deploy-resources
+  title: Deploy Resources
+  description: Deploy Resource to Kubernetes
+spec:
+  owner: guest
+  type: service
+  # these are the steps which are rendered in the frontend with the form input
+  parameters:
+    - title: Choose AWS Resources
+      description: Select a AWS resource to add to your repository.
+      properties:
+        path:
+          type: string
+          description: path to place this file into
+          default: kustomize/base
+        name:
+          type: string
+          description: name of this resource. This will be the name of K8s object.
+      required:
+        - awsResources
+        - name
+  steps:
+  - id: serialize
+      name: serialize
+      action: roadiehq:utils:serialize:yaml
+      input:
+        data:
+          apiVersion: ${{ parameters.apiVersion }}
+          kind: ${{ parameters.kind }}
+          metadata:
+            name: ${{ parameters.name }}
+            namespace: ${{ parameters.namespace }}
+          spec: ${{ parameters.config }}
+  - id: apply
+    name: apply-manifest
+    action: kubernetes:apply
+    input:
+      namespaced: true
+      manifest: ${{ steps['serialize'].output.serialized }}
