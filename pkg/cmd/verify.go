@@ -7,7 +7,6 @@ import (
 	"strings"
 
 	"github.com/cnoe-io/cnoe-cli/pkg/lib"
-	"github.com/fatih/color"
 	"github.com/hashicorp/go-multierror"
 	"github.com/spf13/cobra"
 	v1 "k8s.io/api/core/v1"
@@ -54,9 +53,6 @@ func verify(cmd *cobra.Command, args []string) error {
 
 func Verify(stdout, stderr io.Writer, cli lib.IK8sClient, configs []lib.Config) error {
 	var result error
-
-	red := color.New(color.FgRed).SprintFunc()
-	green := color.New(color.FgGreen).SprintFunc()
 
 	for _, config := range configs {
 

@@ -4,12 +4,16 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/fatih/color"
 	"github.com/spf13/cobra"
 )
 
 var (
 	kubeConfig string
 	configPath string
+
+	red   = color.New(color.FgRed).SprintFunc()
+	green = color.New(color.FgGreen).SprintFunc()
 
 	rootCmd = &cobra.Command{
 		Use:   "cnoe",
