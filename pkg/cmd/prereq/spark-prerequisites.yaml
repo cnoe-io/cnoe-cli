@@ -1,5 +1,5 @@
 apiVersion: cnoe.io/v1alpha1
-kind: Prerequisit
+kind: Prerequisite
 metadata:
   name: spark
 spec:

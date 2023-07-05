@@ -34,15 +34,31 @@ var _ = Describe("Verify", func() {
 		fakeK8sClient = &libfakes.FakeIK8sClient{}
 	})
 
-	Context("when apiVersion not matching", func() {
-		BeforeEach(func() {
-			cfg = &[]lib.Config{{}}
+	Context("when GVK is not matching", func() {
+		Context("with missing apiVersion", func() {
+			BeforeEach(func() {
+				cfg = &[]lib.Config{{}}
+			})
+
+			It("indicate that apiVersion is not matching", func() {
+				err := cmd.Verify(stdout, stderr, fakeK8sClient, *cfg)
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("apiVersion or kind not matching"))
+			})
 		})
 
-		It("indicate that apiVersion is not matching", func() {
-			err := cmd.Verify(stdout, stderr, fakeK8sClient, *cfg)
-			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("apiVersion not matching"))
+		Context("with missing Kind", func() {
+			BeforeEach(func() {
+				cfg = &[]lib.Config{{
+					ApiVersion: "cnoe.io/v1alpha1",
+				}}
+			})
+
+			It("indicate that apiVersion is not matching", func() {
+				err := cmd.Verify(stdout, stderr, fakeK8sClient, *cfg)
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("apiVersion or kind not matching"))
+			})
 		})
 	})
 
@@ -50,10 +66,11 @@ var _ = Describe("Verify", func() {
 		BeforeEach(func() {
 			cfg = &[]lib.Config{{
 				ApiVersion: "cnoe.io/v1alpha1",
+				Kind:       "Prerequisite",
 			}}
 		})
 
-		It("indicate that apiVersion is not matching", func() {
+		It("indicate that name is missing", func() {
 			err := cmd.Verify(stdout, stderr, fakeK8sClient, *cfg)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("missing metadata.name"))
@@ -65,6 +82,7 @@ var _ = Describe("Verify", func() {
 			cfg = &[]lib.Config{
 				{
 					ApiVersion: "cnoe.io/v1alpha1",
+					Kind:       "Prerequisite",
 					Metadata: lib.Metadata{
 						Name: "test-prereq",
 					},
@@ -143,6 +161,7 @@ var _ = Describe("Verify", func() {
 				cfg = &[]lib.Config{
 					{
 						ApiVersion: "cnoe.io/v1alpha1",
+						Kind:       "Prerequisite",
 						Metadata: lib.Metadata{
 							Name: "test-prereq",
 						},
@@ -203,6 +222,7 @@ var _ = Describe("Verify", func() {
 				cfg = &[]lib.Config{
 					{
 						ApiVersion: "cnoe.io/v1alpha1",
+						Kind:       "Prerequisite",
 						Metadata: lib.Metadata{
 							Name: "test-prereq",
 						},
@@ -258,6 +278,7 @@ var _ = Describe("Verify", func() {
 				cfg = &[]lib.Config{
 					{
 						ApiVersion: "cnoe.io/v1alpha1",
+						Kind:       "Prerequisite",
 						Metadata: lib.Metadata{
 							Name: "test-prereq",
 						},
@@ -281,5 +302,4 @@ var _ = Describe("Verify", func() {
 			})
 		})
 	})
-
 })

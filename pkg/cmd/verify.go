@@ -15,6 +15,7 @@ import (
 const (
 	Version = "v1alpha1"
 	Group   = "cnoe.io"
+	Kind    = "Prerequisite"
 )
 
 var (
@@ -56,8 +57,8 @@ func Verify(stdout, stderr io.Writer, cli lib.IK8sClient, configs []lib.Config) 
 
 	for _, config := range configs {
 
-		if config.ApiVersion != fmt.Sprintf("%s/%s", Group, Version) {
-			result = multierror.Append(result, errors.New(fmt.Sprintf("apiVersion not matching %s/%s", Group, Version)))
+		if config.ApiVersion != fmt.Sprintf("%s/%s", Group, Version) || config.Kind != Kind {
+			result = multierror.Append(result, errors.New(fmt.Sprintf("apiVersion or kind not matching %s/%s:%s", Group, Version, Kind)))
 			continue
 		}
 
