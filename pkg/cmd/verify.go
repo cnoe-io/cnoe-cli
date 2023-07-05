@@ -23,8 +23,8 @@ var (
 
 	verifyCmd = &cobra.Command{
 		Use:           "verify",
-		Short:         "verify if the deployment exists",
-		Long:          `verify if the required resources and controllers are working as expected`,
+		Short:         "Verify if the deployment exists",
+		Long:          `Verify if the required resources and controllers are working as expected`,
 		RunE:          verify,
 		SilenceUsage:  true,
 		SilenceErrors: true,
@@ -32,9 +32,9 @@ var (
 )
 
 func init() {
-	rootCmd.AddCommand(verifyCmd)
+	k8sCmd.AddCommand(verifyCmd)
 
-	verifyCmd.Flags().StringArrayVarP(&configPaths, "config", "c", []string{}, "list of prerequisit configurations")
+	verifyCmd.Flags().StringArrayVarP(&configPaths, "config", "c", []string{}, "list of prerequisit configurations (samples under config/prereq)")
 	verifyCmd.MarkFlagRequired("config")
 }
 

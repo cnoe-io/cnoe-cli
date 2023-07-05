@@ -9,9 +9,6 @@ import (
 )
 
 var (
-	kubeConfig string
-	configPath string
-
 	red   = color.New(color.FgRed).SprintFunc()
 	green = color.New(color.FgGreen).SprintFunc()
 
@@ -25,22 +22,7 @@ var (
 	}
 )
 
-func init() {
-	rootCmd.PersistentFlags().StringVarP(&kubeConfig, "kubeconfig", "k", "~/.kube/config", "path to the kubeconfig file")
-}
-
 func Execute() {
-	kubeConfig = os.Getenv("KUBECONFIG")
-	if kubeConfig == "" {
-		homeDir, err := os.UserHomeDir()
-		if err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			os.Exit(1)
-		}
-
-		kubeConfig = fmt.Sprintf("%s/.kube/config", homeDir)
-	}
-
 	if err := rootCmd.Execute(); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
