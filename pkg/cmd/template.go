@@ -24,6 +24,7 @@ var (
 	inputDir     string
 	outputDir    string
 	templatePath string
+	verifiers    []string
 	namespaced   bool
 )
 
@@ -32,6 +33,7 @@ func init() {
 	templateCmd.Flags().StringVarP(&inputDir, "inputDir", "i", "", "input directory for CRDs and XRDs to be templatized")
 	templateCmd.Flags().StringVarP(&outputDir, "outputDir", "o", "", "output directory for backstage templates to be stored in")
 	templateCmd.Flags().StringVarP(&templatePath, "templatePath", "t", "scaffolding/template.yaml", "path to the template to be augmented with backstage info")
+	templateCmd.Flags().StringArrayVarP(&verifiers, "verifier", "v", []string{}, "list of verifiers to test the resource against")
 	templateCmd.Flags().BoolVarP(&namespaced, "namespaced", "n", false, "whether or not resources are namespaced")
 
 	templateCmd.MarkFlagRequired("inputDir")
@@ -190,6 +192,22 @@ func writeSchema(outputPath string, defs []string) (cmdOutput, error) {
 				"namespace":   "default",
 			},
 				"properties", "namespace")
+		}
+
+		// add verifiers to the resource
+		if len(verifiers) > 0 {
+			var convertedVerifiers []interface{} = make([]interface{}, len(verifiers))
+			for i, v := range verifiers {
+				convertedVerifiers[i] = v
+			}
+
+			unstructured.SetNestedMap(obj.Object, map[string]interface{}{
+				"type":        "array",
+				"description": "verifiers to be used against the resource",
+				"items":       map[string]interface{}{"type": "string"},
+				"default":     convertedVerifiers,
+			},
+				"properties", "verifiers")
 		}
 
 		wrapperData, err := yaml.Marshal(obj.Object)

@@ -24,20 +24,30 @@ spec:
         - awsResources
         - name
   steps:
+  - id: verify
+    name: verify
+    action: cnoe:verify:dependency
+    input:
+      verifiers: ${{ parameters.verifiers }}
   - id: serialize
-      name: serialize
-      action: roadiehq:utils:serialize:yaml
-      input:
-        data:
-          apiVersion: ${{ parameters.apiVersion }}
-          kind: ${{ parameters.kind }}
-          metadata:
-            name: ${{ parameters.name }}
-            namespace: ${{ parameters.namespace }}
-          spec: ${{ parameters.config }}
+    name: serialize
+    action: roadiehq:utils:serialize:yaml
+    input:
+      data:
+        apiVersion: ${{ parameters.apiVersion }}
+        kind: ${{ parameters.kind }}
+        metadata:
+          name: ${{ parameters.name }}
+          namespace: ${{ parameters.namespace }}
+        spec: ${{ parameters.config }}
+  - id: sanitize
+    name: sanitize
+    action: cnoe:utils:sanitize
+    input:
+      document: ${{ steps['serialize'].output.serialized }}
   - id: apply
     name: apply-manifest
     action: kubernetes:apply
     input:
       namespaced: true
-      manifest: ${{ steps['serialize'].output.serialized }}
+      manifest: ${{ steps['sanitize'].output.sanitized }}
