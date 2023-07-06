@@ -20,13 +20,12 @@ Usage:
 Available Commands:
   completion  Generate the autocompletion script for the specified shell
   help        Help about any command
-  verify      verify if the deployment exists
+  k8s         Run against a kubernets cluster
+  template    Generate backstage templates from CRD/XRD
   version     Print the version number of Hugo
 
 Flags:
-  -c, --config string       path to config file (default "./config.yaml")
-  -h, --help                help for cnoe
-  -k, --kubeconfig string   path to the kubeconfig file (default "~/.kube/config")
+  -h, --help   help for cnoe
 
 Use "cnoe [command] --help" for more information about a command.
 ```
