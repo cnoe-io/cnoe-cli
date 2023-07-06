@@ -26,6 +26,10 @@ var (
 	templatePath string
 	verifiers    []string
 	namespaced   bool
+
+	templateName        string
+	templateTitle       string
+	templateDescription string
 )
 
 func init() {
@@ -35,6 +39,10 @@ func init() {
 	templateCmd.Flags().StringVarP(&templatePath, "templatePath", "t", "scaffolding/template.yaml", "path to the template to be augmented with backstage info")
 	templateCmd.Flags().StringArrayVarP(&verifiers, "verifier", "v", []string{}, "list of verifiers to test the resource against")
 	templateCmd.Flags().BoolVarP(&namespaced, "namespaced", "n", false, "whether or not resources are namespaced")
+
+	templateCmd.Flags().StringVarP(&templateName, "templateName", "", "", "sets the name of the template")
+	templateCmd.Flags().StringVarP(&templateTitle, "templateTitle", "", "", "sets the title of the template")
+	templateCmd.Flags().StringVarP(&templateDescription, "templateDescription", "", "", "sets the description of the template")
 
 	templateCmd.MarkFlagRequired("inputDir")
 	templateCmd.MarkFlagRequired("outputDir")
@@ -242,6 +250,18 @@ func writeToTemplate(templateFile string, outputPath string, resources []string,
 		return err
 	}
 
+	if templateName != "" {
+		doc.Metadata.Name = templateName
+	}
+
+	if templateTitle != "" {
+		doc.Metadata.Title = templateTitle
+	}
+
+	if templateDescription != "" {
+		doc.Metadata.Description = templateDescription
+	}
+
 	dependencies := struct {
 		AwsResources struct {
 			OneOf []map[string]interface{} `yaml:"oneOf,omitempty"`
@@ -270,7 +290,7 @@ func writeToTemplate(templateFile string, outputPath string, resources []string,
 		return err
 	}
 
-	err = ioutil.WriteFile(fmt.Sprintf("%s/test.yaml", outputPath), outputData, 0644)
+	err = ioutil.WriteFile(fmt.Sprintf("%s/template.yaml", outputPath), outputData, 0644)
 	if err != nil {
 		return err
 	}

@@ -4,11 +4,8 @@ metadata:
   name: spark
 spec:
   pods:
-  - name: spark-operator
+  - name: sprk-operator
   crds:
   - group: sparkoperator.k8s.io
-    kind: SparkApplications
-    version: v1beta2
-  - group: sparkoperator.k8s.io
-    kind: ScheduledSparkApplications
+    kind: SparkApplication
     version: v1beta2
