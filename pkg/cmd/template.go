@@ -314,6 +314,25 @@ func ConvertMap(originalData interface{}) (map[string]interface{}, error) {
 			convertedMap[strKey] = int64(v)
 		case int32:
 			convertedMap[strKey] = int64(v)
+		case []interface{}:
+			dv := make([]interface{}, len(v))
+			for _, ve := range v {
+				switch ive := ve.(type) {
+				case map[interface{}]interface{}:
+					ivec, err := ConvertMap(ive)
+					if err != nil {
+						return nil, errors.New(fmt.Sprintf("failed to convert for key %s", strKey))
+					}
+					dv = append(dv, ivec)
+				case int:
+					dv = append(dv, int64(ive))
+				case int32:
+					dv = append(dv, int64(ive))
+				default:
+					dv = append(dv, ive)
+				}
+			}
+			convertedMap[strKey] = dv
 		default:
 			// Otherwise, add the key-value pair to the converted map
 			convertedMap[strKey] = v
