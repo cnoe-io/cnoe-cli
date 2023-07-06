@@ -47,7 +47,7 @@ spec:
       document: ${{ steps['serialize'].output.serialized }}
   - id: apply
     name: apply-manifest
-    action: kubernetes:apply
+    action: cnoe:kubernetes:apply
     input:
       namespaced: true
       manifest: ${{ steps['sanitize'].output.sanitized }}
