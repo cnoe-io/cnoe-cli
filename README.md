@@ -28,6 +28,22 @@ Flags:
   -h, --help   help for cnoe
 
 Use "cnoe [command] --help" for more information about a command.
+
+
+❯ ./cnoe k8s -h
+Commands that assume a kubernetes cluster as the backend
+
+Usage:
+  cnoe k8s [command]
+
+Available Commands:
+  verify      Verify if the deployment exists
+
+Flags:
+  -h, --help                help for k8s
+  -k, --kubeconfig string   path to the kubeconfig file (default "~/.kube/config")
+
+Use "cnoe k8s [command] --help" for more information about a command.
 ```
 
 ## Test
