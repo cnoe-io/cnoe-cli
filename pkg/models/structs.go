@@ -43,8 +43,8 @@ type Config struct {
 }
 
 type Props struct {
-	AWSResources Resources `json:"awsResources"`
-	Config       Config    `json:"config"`
+	Resources Resources `json:"resources"`
+	Config    Config    `json:"config"`
 }
 
 type Wrapper struct {
@@ -65,9 +65,9 @@ type Template struct {
 		Parameters []struct {
 			Properties   map[string]interface{} `yaml:"properties"`
 			Dependencies struct {
-				AwsResources struct {
+				Resources struct {
 					OneOf []map[string]interface{} `yaml:"oneOf,omitempty"`
-				} `yaml:"awsResources,omitempty"`
+				} `yaml:"resources,omitempty"`
 			} `yaml:"dependencies,omitempty"`
 		} `yaml:"parameters"`
 

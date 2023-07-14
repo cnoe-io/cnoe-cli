@@ -1,0 +1,36 @@
+properties:
+  apiVersion:
+    default: sparkoperator.k8s.io/v1beta2
+    description: APIVersion for the resource
+    type: string
+  awsResources:
+    enum:
+    - sparkoperator.k8s.io.SparkApplication
+  config:
+    properties:
+      arguments:
+        items:
+          type: string
+        type: array
+      batchScheduler:
+        type: string
+      batchSchedulerOptions:
+        properties:
+          priorityClassName:
+            type: string
+          queue:
+            type: string
+          resources:
+            additionalProperties:
+              anyOf:
+              - type: integer
+              - type: string
+              pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+              x-kubernetes-int-or-string: true
+            type: object
+        type: object
+    title: sparkoperator.k8s.io.SparkApplication configuration options
+  kind:
+    default: SparkApplication
+    description: Kind for the resource
+    type: string

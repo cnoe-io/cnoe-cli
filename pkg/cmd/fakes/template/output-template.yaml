@@ -1,0 +1,31 @@
+apiVersion: scaffolder.backstage.io/v1beta3
+kind: Template
+metadata:
+  name: test-name
+  title: test-title
+  description: test-description
+spec:
+  owner: guest
+  type: service
+  parameters:
+  - properties:
+      resources:
+        type: string
+        enum:
+        - sparkoperator.k8s.io.SparkApplication
+      name:
+        description: name of this resource. This will be the name of K8s object.
+        type: string
+      path:
+        default: kustomize/base
+        description: path to place this file into
+        type: string
+    dependencies:
+      resources:
+        oneOf:
+        - $yaml: resources/sparkoperator.k8s.io.sparkapplication.yaml
+  steps:
+  - id: verify
+    name: verify
+    action: cnoe:verify:dependency
+    input: {}

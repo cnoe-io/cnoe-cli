@@ -3,6 +3,7 @@ package cmd
 import (
 	"errors"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -15,7 +16,7 @@ import (
 )
 
 const (
-	defDir  = "aws-resources"
+	defDir  = "resources"
 	KindXRD = "CompositeResourceDefinition"
 	KindCRD = "CustomResourceDefinition"
 )
@@ -60,35 +61,56 @@ var (
 			}
 			return nil
 		},
-		RunE: func(cmd *cobra.Command, args []string) error {
-
-			defs := defs(inputDir, 0)
-
-			output, err := writeSchema(
-				outputDir,
-				defs,
-			)
-			if err != nil {
-				return err
-			}
-
-			err = writeToTemplate(
-				templatePath,
-				outputDir,
-				output.Resources, 0)
-
-			if err != nil {
-				return err
-			}
-
-			return nil
-		},
+		RunE: template,
 	}
 )
 
 type cmdOutput struct {
 	Templates []string
 	Resources []string
+}
+
+func template(cmd *cobra.Command, args []string) error {
+	return Template(
+		cmd.OutOrStdout(), cmd.OutOrStderr(),
+		inputDir, outputDir, templatePath,
+		verifiers, namespaced,
+		templateName, templateTitle, templateDescription,
+	)
+}
+
+func Template(
+	stdout, stderr io.Writer,
+	inputDir, outputDir, templatePath string,
+	verifiers []string, namespaced bool,
+	templateName, templateTitle, templateDescription string,
+) error {
+	defs := defs(inputDir, 0)
+
+	output, err := writeSchema(
+		stdout, stderr,
+		outputDir,
+		defs,
+	)
+	if err != nil {
+		return err
+	}
+
+	err = writeToTemplate(
+		stdout, stderr,
+		templatePath,
+		outputDir,
+		output.Resources, 0,
+		templateName,
+		templateTitle,
+		templateDescription,
+	)
+
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func defs(dir string, depth int) []string {
@@ -113,13 +135,13 @@ func defs(dir string, depth int) []string {
 	return out
 }
 
-func writeSchema(outputPath string, defs []string) (cmdOutput, error) {
+func writeSchema(stdout, stderr io.Writer, outputDir string, defs []string) (cmdOutput, error) {
 	out := cmdOutput{
 		Templates: make([]string, 0),
 		Resources: make([]string, 0),
 	}
 
-	templateOutputDir := fmt.Sprintf("%s/%s", outputPath, defDir)
+	templateOutputDir := fmt.Sprintf("%s/%s", outputDir, defDir)
 	_, err := os.Stat(templateOutputDir)
 	if os.IsNotExist(err) {
 		// Directory doesn't exist, so create it
@@ -127,7 +149,7 @@ func writeSchema(outputPath string, defs []string) (cmdOutput, error) {
 		if err != nil {
 			return cmdOutput{}, err
 		}
-		fmt.Println("Directory created successfully!")
+		fmt.Fprintf(stdout, "Directory created successfully!")
 	} else if err != nil {
 		return cmdOutput{}, err
 	}
@@ -148,7 +170,7 @@ func writeSchema(outputPath string, defs []string) (cmdOutput, error) {
 			continue
 		}
 
-		fmt.Printf("foud: %s\n", def)
+		fmt.Fprintf(stdout, "foud: %s\n", def)
 		var resourceName string
 		if doc.Spec.ClaimNames != nil {
 			resourceName = doc.Spec.ClaimNames.Kind
@@ -164,7 +186,7 @@ func writeSchema(outputPath string, defs []string) (cmdOutput, error) {
 		} else {
 			value, err = ConvertMap(v)
 			if err != nil {
-				fmt.Printf("failed %s: %s \n", def, err.Error())
+				fmt.Fprintf(stdout, "failed %s: %s \n", def, err.Error())
 				continue
 			}
 		}
@@ -172,7 +194,7 @@ func writeSchema(outputPath string, defs []string) (cmdOutput, error) {
 		obj := &unstructured.Unstructured{
 			Object: make(map[string]interface{}, 0),
 		}
-		unstructured.SetNestedSlice(obj.Object, ConvertSlice([]string{resourceName}), "properties", "awsResources", "enum")
+		unstructured.SetNestedSlice(obj.Object, ConvertSlice([]string{resourceName}), "properties", "resources", "enum")
 		unstructured.SetNestedMap(obj.Object, value, "properties", "config")
 		unstructured.SetNestedField(obj.Object, fmt.Sprintf("%s configuration options", resourceName), "properties", "config", "title")
 
@@ -220,14 +242,14 @@ func writeSchema(outputPath string, defs []string) (cmdOutput, error) {
 
 		wrapperData, err := yaml.Marshal(obj.Object)
 		if err != nil {
-			fmt.Printf("failed %s: %s \n", def, err.Error())
+			fmt.Fprintf(stdout, "failed %s: %s \n", def, err.Error())
 			continue
 		}
 
 		template := fmt.Sprintf("%s/%s.yaml", templateOutputDir, strings.ToLower(resourceName))
 		err = ioutil.WriteFile(template, []byte(wrapperData), 0644)
 		if err != nil {
-			fmt.Printf("failed %s: %s \n", def, err.Error())
+			fmt.Fprintf(stdout, "failed %s: %s \n", def, err.Error())
 			continue
 		}
 
@@ -238,7 +260,11 @@ func writeSchema(outputPath string, defs []string) (cmdOutput, error) {
 	return out, nil
 }
 
-func writeToTemplate(templateFile string, outputPath string, resources []string, position int) error {
+func writeToTemplate(
+	stdout, stderr io.Writer,
+	templateFile string, outputPath string, identifiedResources []string, position int,
+	templateName, templateTitle, templateDescription string,
+) error {
 	templateData, err := ioutil.ReadFile(templateFile)
 	if err != nil {
 		return err
@@ -263,26 +289,30 @@ func writeToTemplate(templateFile string, outputPath string, resources []string,
 	}
 
 	dependencies := struct {
-		AwsResources struct {
+		Resources struct {
 			OneOf []map[string]interface{} `yaml:"oneOf,omitempty"`
-		} `yaml:"awsResources,omitempty"`
+		} `yaml:"resources,omitempty"`
 	}{}
 
-	awsResources := struct {
+	resources := struct {
 		Type string   `yaml:"type"`
 		Enum []string `yaml:"enum"`
 	}{
 		Type: "string",
-		Enum: resources,
+		Enum: identifiedResources,
 	}
 
-	for _, resource := range resources {
-		dependencies.AwsResources.OneOf = append(dependencies.AwsResources.OneOf, map[string]interface{}{
-			"$yaml": fmt.Sprintf("aws-resources/%s.yaml", strings.ToLower(resource)),
+	for _, r := range identifiedResources {
+		dependencies.Resources.OneOf = append(dependencies.Resources.OneOf, map[string]interface{}{
+			"$yaml": fmt.Sprintf("resources/%s.yaml", strings.ToLower(r)),
 		})
 	}
 
-	doc.Spec.Parameters[position].Properties["awsResources"] = awsResources
+	if len(doc.Spec.Parameters) <= position {
+		return errors.New("not the right template or input format")
+	}
+
+	doc.Spec.Parameters[position].Properties["resources"] = resources
 	doc.Spec.Parameters[position].Dependencies = dependencies
 
 	outputData, err := yaml.Marshal(&doc)
@@ -295,7 +325,7 @@ func writeToTemplate(templateFile string, outputPath string, resources []string,
 		return err
 	}
 
-	fmt.Println("Template successfully written.")
+	fmt.Fprintf(stdout, "Template successfully written.")
 	return nil
 }
 
