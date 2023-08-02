@@ -11,7 +11,7 @@ import (
 
 	"github.com/cnoe-io/cnoe-cli/pkg/models"
 	"github.com/spf13/cobra"
-	"gopkg.in/yaml.v2"
+	"gopkg.in/yaml.v3"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 )
 
