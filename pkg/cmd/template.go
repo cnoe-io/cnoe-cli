@@ -11,6 +11,6 @@ var templateCmd = &cobra.Command{
 
 func init() {
 	rootCmd.AddCommand(templateCmd)
-	crdCmd.Flags().StringVarP(&inputDir, "inputDir", "i", "", "input directory for CRDs and XRDs to be templatized")
-	crdCmd.Flags().StringVarP(&outputDir, "outputDir", "o", "", "output directory for backstage templates to be stored in")
+	crdCmd.PersistentFlags().StringVarP(&inputDir, "inputDir", "i", "", "input directory for CRDs and XRDs to be templatized")
+	crdCmd.PersistentFlags().StringVarP(&outputDir, "outputDir", "o", "", "output directory for backstage templates to be stored in")
 }

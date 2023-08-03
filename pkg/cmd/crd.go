@@ -43,8 +43,8 @@ func init() {
 	crdCmd.Flags().StringVarP(&templateTitle, "templateTitle", "", "", "sets the title of the template")
 	crdCmd.Flags().StringVarP(&templateDescription, "templateDescription", "", "", "sets the description of the template")
 
-	crdCmd.MarkFlagRequired("inputDir")
-	crdCmd.MarkFlagRequired("outputDir")
+	crdCmd.MarkPersistentFlagRequired("inputDir")
+	crdCmd.MarkPersistentFlagRequired("outputDir")
 	crdCmd.MarkFlagRequired("templatePath")
 }
 
