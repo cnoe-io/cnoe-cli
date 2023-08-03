@@ -56,7 +56,7 @@ var _ = Describe("Template", func() {
 
 	Context("with valid input", func() {
 		BeforeEach(func() {
-			err := cmd.Template(stdout, stderr, inputDir, outputDir, templateFile,
+			err := cmd.Crd(stdout, stderr, inputDir, outputDir, templateFile,
 				[]string{}, false, templateName, templateTitle, templateDescription,
 			)
 			Expect(err).NotTo(HaveOccurred())

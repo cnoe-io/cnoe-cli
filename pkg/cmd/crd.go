@@ -57,7 +57,7 @@ var (
 			}
 			return nil
 		},
-		RunE: template,
+		RunE: crd,
 	}
 )
 
@@ -66,8 +66,8 @@ type cmdOutput struct {
 	Resources []string
 }
 
-func template(cmd *cobra.Command, args []string) error {
-	return Template(
+func crd(cmd *cobra.Command, args []string) error {
+	return Crd(
 		cmd.OutOrStdout(), cmd.OutOrStderr(),
 		inputDir, outputDir, templatePath,
 		verifiers, namespaced,
@@ -75,7 +75,7 @@ func template(cmd *cobra.Command, args []string) error {
 	)
 }
 
-func Template(
+func Crd(
 	stdout, stderr io.Writer,
 	inputDir, outputDir, templatePath string,
 	verifiers []string, namespaced bool,
