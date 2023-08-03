@@ -4,14 +4,13 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
 
 	"github.com/cnoe-io/cnoe-cli/pkg/models"
 	"github.com/spf13/cobra"
-	"gopkg.in/yaml.v2"
+	"gopkg.in/yaml.v3"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 )
 
@@ -116,7 +115,7 @@ func defs(dir string, depth int) []string {
 
 	var out []string
 	base, _ := filepath.Abs(dir)
-	files, _ := ioutil.ReadDir(base)
+	files, _ := os.ReadDir(base)
 	for _, file := range files {
 		f := filepath.Join(base, file.Name())
 		stat, _ := os.Stat(f)
@@ -151,7 +150,7 @@ func writeSchema(stdout, stderr io.Writer, outputDir string, defs []string) (cmd
 	}
 
 	for _, def := range defs {
-		data, err := ioutil.ReadFile(def)
+		data, err := os.ReadFile(def)
 		if err != nil {
 			continue
 		}
@@ -159,6 +158,7 @@ func writeSchema(stdout, stderr io.Writer, outputDir string, defs []string) (cmd
 		var doc models.Definition
 		err = yaml.Unmarshal(data, &doc)
 		if err != nil {
+			fmt.Printf("failed to read %s. This file will be excluded. %s", def, err)
 			continue
 		}
 
@@ -182,8 +182,7 @@ func writeSchema(stdout, stderr io.Writer, outputDir string, defs []string) (cmd
 		} else {
 			value, err = ConvertMap(v)
 			if err != nil {
-				fmt.Fprintf(stdout, "failed %s: %s \n", def, err.Error())
-				continue
+				return cmdOutput{}, err
 			}
 		}
 
@@ -243,7 +242,7 @@ func writeSchema(stdout, stderr io.Writer, outputDir string, defs []string) (cmd
 		}
 
 		template := fmt.Sprintf("%s/%s.yaml", templateOutputDir, strings.ToLower(resourceName))
-		err = ioutil.WriteFile(template, []byte(wrapperData), 0644)
+		err = os.WriteFile(template, []byte(wrapperData), 0644)
 		if err != nil {
 			fmt.Fprintf(stdout, "failed %s: %s \n", def, err.Error())
 			continue
@@ -261,7 +260,7 @@ func writeToTemplate(
 	templateFile string, outputPath string, identifiedResources []string, position int,
 	templateName, templateTitle, templateDescription string,
 ) error {
-	templateData, err := ioutil.ReadFile(templateFile)
+	templateData, err := os.ReadFile(templateFile)
 	if err != nil {
 		return err
 	}
@@ -316,7 +315,7 @@ func writeToTemplate(
 		return err
 	}
 
-	err = ioutil.WriteFile(fmt.Sprintf("%s/template.yaml", outputPath), outputData, 0644)
+	err = os.WriteFile(fmt.Sprintf("%s/template.yaml", outputPath), outputData, 0644)
 	if err != nil {
 		return err
 	}
@@ -334,32 +333,26 @@ func ConvertSlice(strSlice []string) []interface{} {
 }
 
 func ConvertMap(originalData interface{}) (map[string]interface{}, error) {
-	originalMap, ok := originalData.(map[interface{}]interface{})
+	originalMap, ok := originalData.(map[string]interface{})
 	if !ok {
-		return nil, errors.New("failed to convert to interface map")
+		return nil, errors.New("conversion failed: data is not map[string]interface{}")
 	}
 
 	convertedMap := make(map[string]interface{})
 
 	for key, value := range originalMap {
-		strKey, ok := key.(string)
-		if !ok {
-			// Skip the key if it cannot be converted to string
-			continue
-		}
-
 		switch v := value.(type) {
 		case map[interface{}]interface{}:
 			// If the value is a nested map, recursively convert it
 			var err error
-			convertedMap[strKey], err = ConvertMap(v)
+			convertedMap[key], err = ConvertMap(v)
 			if err != nil {
-				return nil, errors.New(fmt.Sprintf("failed to convert for key %s", strKey))
+				return nil, errors.New(fmt.Sprintf("failed to convert for key %s", key))
 			}
 		case int:
-			convertedMap[strKey] = int64(v)
+			convertedMap[key] = int64(v)
 		case int32:
-			convertedMap[strKey] = int64(v)
+			convertedMap[key] = int64(v)
 		case []interface{}:
 			dv := make([]interface{}, len(v))
 			for i, ve := range v {
@@ -367,7 +360,7 @@ func ConvertMap(originalData interface{}) (map[string]interface{}, error) {
 				case map[interface{}]interface{}:
 					ivec, err := ConvertMap(ive)
 					if err != nil {
-						return nil, errors.New(fmt.Sprintf("failed to convert for key %s", strKey))
+						return nil, errors.New(fmt.Sprintf("failed to convert for key %s", key))
 					}
 					dv[i] = ivec
 				case int:
@@ -378,10 +371,10 @@ func ConvertMap(originalData interface{}) (map[string]interface{}, error) {
 					dv[i] = ive
 				}
 			}
-			convertedMap[strKey] = dv
+			convertedMap[key] = dv
 		default:
 			// Otherwise, add the key-value pair to the converted map
-			convertedMap[strKey] = v
+			convertedMap[key] = v
 		}
 	}
 
@@ -394,16 +387,4 @@ func isXRD(m models.Definition) bool {
 
 func isCRD(m models.Definition) bool {
 	return m.Kind == KindCRD
-}
-
-func isDirectory(path string) bool {
-	// Get file information
-	info, err := os.Stat(path)
-	if err != nil {
-		// Error occurred, path does not exist or cannot be accessed
-		return false
-	}
-
-	// Check if the path is a directory
-	return info.Mode().IsDir()
 }

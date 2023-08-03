@@ -79,3 +79,19 @@ type Template struct {
 		} `yaml:"steps"`
 	} `yaml:"spec"`
 }
+
+type BackstageParamFields struct {
+	Title                string `yaml:",omitempty"`
+	Type                 string
+	Description          string                           `yaml:",omitempty"`
+	Default              any                              `yaml:",omitempty"`
+	Items                *BackstageParamFields            `yaml:",omitempty"`
+	UIWidget             string                           `yaml:"ui:widget,omitempty"`
+	Properties           map[string]*BackstageParamFields `yaml:"UiWidget,omitempty"`
+	AdditionalProperties *AdditionalProperties            `yaml:"additionalProperties,omitempty"`
+	UniqueItems          *bool                            `yaml:",omitempty"` // This does not guarantee a set. Works for primitives only.
+}
+
+type AdditionalProperties struct { // technically any but for our case, it should be a type: string
+	Type string `yaml:",omitempty"`
+}
