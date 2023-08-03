@@ -43,6 +43,8 @@ func init() {
 	crdCmd.Flags().StringVarP(&templateTitle, "templateTitle", "", "", "sets the title of the template")
 	crdCmd.Flags().StringVarP(&templateDescription, "templateDescription", "", "", "sets the description of the template")
 
+	crdCmd.MarkFlagRequired("inputDir")
+	crdCmd.MarkFlagRequired("outputDir")
 	crdCmd.MarkFlagRequired("templatePath")
 }
 
@@ -57,7 +59,7 @@ var (
 			}
 			return nil
 		},
-		RunE: crd,
+		RunE: template,
 	}
 )
 
@@ -66,8 +68,8 @@ type cmdOutput struct {
 	Resources []string
 }
 
-func crd(cmd *cobra.Command, args []string) error {
-	return Crd(
+func template(cmd *cobra.Command, args []string) error {
+	return Template(
 		cmd.OutOrStdout(), cmd.OutOrStderr(),
 		inputDir, outputDir, templatePath,
 		verifiers, namespaced,
@@ -75,7 +77,7 @@ func crd(cmd *cobra.Command, args []string) error {
 	)
 }
 
-func Crd(
+func Template(
 	stdout, stderr io.Writer,
 	inputDir, outputDir, templatePath string,
 	verifiers []string, namespaced bool,
