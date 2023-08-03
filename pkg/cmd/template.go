@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
@@ -120,7 +119,7 @@ func defs(dir string, depth int) []string {
 
 	var out []string
 	base, _ := filepath.Abs(dir)
-	files, _ := ioutil.ReadDir(base)
+	files, _ := os.ReadDir(base)
 	for _, file := range files {
 		f := filepath.Join(base, file.Name())
 		stat, _ := os.Stat(f)
@@ -155,7 +154,7 @@ func writeSchema(stdout, stderr io.Writer, outputDir string, defs []string) (cmd
 	}
 
 	for _, def := range defs {
-		data, err := ioutil.ReadFile(def)
+		data, err := os.ReadFile(def)
 		if err != nil {
 			continue
 		}
@@ -247,7 +246,7 @@ func writeSchema(stdout, stderr io.Writer, outputDir string, defs []string) (cmd
 		}
 
 		template := fmt.Sprintf("%s/%s.yaml", templateOutputDir, strings.ToLower(resourceName))
-		err = ioutil.WriteFile(template, []byte(wrapperData), 0644)
+		err = os.WriteFile(template, []byte(wrapperData), 0644)
 		if err != nil {
 			fmt.Fprintf(stdout, "failed %s: %s \n", def, err.Error())
 			continue
@@ -265,7 +264,7 @@ func writeToTemplate(
 	templateFile string, outputPath string, identifiedResources []string, position int,
 	templateName, templateTitle, templateDescription string,
 ) error {
-	templateData, err := ioutil.ReadFile(templateFile)
+	templateData, err := os.ReadFile(templateFile)
 	if err != nil {
 		return err
 	}
@@ -320,7 +319,7 @@ func writeToTemplate(
 		return err
 	}
 
-	err = ioutil.WriteFile(fmt.Sprintf("%s/template.yaml", outputPath), outputData, 0644)
+	err = os.WriteFile(fmt.Sprintf("%s/template.yaml", outputPath), outputData, 0644)
 	if err != nil {
 		return err
 	}
