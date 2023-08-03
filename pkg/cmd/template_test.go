@@ -31,6 +31,7 @@ var _ = Describe("Template", func() {
 		templateDescription = "test-description"
 
 		inputDir             = "./fakes/in-resource"
+		invalidInputDir      = "./fakes/invalid-in-resource"
 		templateFile         = "./fakes/template/input-template.yaml"
 		expectedTemplateFile = "./fakes/template/output-template.yaml"
 		expectedResourceFile = "./fakes/out-resource/output-resource.yaml"
@@ -101,6 +102,22 @@ var _ = Describe("Template", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			Expect(generatedResource).To(Equal(expectedResource))
+		})
+	})
+
+	Context("with invalid input files", func() {
+		BeforeEach(func() {
+			err := cmd.Template(stdout, stderr, invalidInputDir, outputDir, templateFile,
+				[]string{}, false, templateName, templateTitle, templateDescription,
+			)
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		It("should create the template files for valid definitions only", func() {
+			resourceDir := fmt.Sprintf("%s/%s", outputDir, "resources")
+			files, err := os.ReadDir(resourceDir)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(len(files)).To(Equal(1))
 		})
 	})
 })
