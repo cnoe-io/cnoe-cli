@@ -11,7 +11,7 @@ import (
 
 	"github.com/cnoe-io/cnoe-cli/pkg/models"
 	"github.com/spf13/cobra"
-	"gopkg.in/yaml.v2"
+	"gopkg.in/yaml.v3"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 )
 
@@ -163,6 +163,7 @@ func writeSchema(stdout, stderr io.Writer, outputDir string, defs []string) (cmd
 		var doc models.Definition
 		err = yaml.Unmarshal(data, &doc)
 		if err != nil {
+			fmt.Printf("failed to read %s. This file will be excluded. %s", def, err)
 			continue
 		}
 
@@ -186,8 +187,7 @@ func writeSchema(stdout, stderr io.Writer, outputDir string, defs []string) (cmd
 		} else {
 			value, err = ConvertMap(v)
 			if err != nil {
-				fmt.Fprintf(stdout, "failed %s: %s \n", def, err.Error())
-				continue
+				return cmdOutput{}, err
 			}
 		}
 
@@ -338,32 +338,26 @@ func ConvertSlice(strSlice []string) []interface{} {
 }
 
 func ConvertMap(originalData interface{}) (map[string]interface{}, error) {
-	originalMap, ok := originalData.(map[interface{}]interface{})
+	originalMap, ok := originalData.(map[string]interface{})
 	if !ok {
-		return nil, errors.New("failed to convert to interface map")
+		return nil, errors.New("conversion failed: data is not map[string]interface{}")
 	}
 
 	convertedMap := make(map[string]interface{})
 
 	for key, value := range originalMap {
-		strKey, ok := key.(string)
-		if !ok {
-			// Skip the key if it cannot be converted to string
-			continue
-		}
-
 		switch v := value.(type) {
 		case map[interface{}]interface{}:
 			// If the value is a nested map, recursively convert it
 			var err error
-			convertedMap[strKey], err = ConvertMap(v)
+			convertedMap[key], err = ConvertMap(v)
 			if err != nil {
-				return nil, errors.New(fmt.Sprintf("failed to convert for key %s", strKey))
+				return nil, errors.New(fmt.Sprintf("failed to convert for key %s", key))
 			}
 		case int:
-			convertedMap[strKey] = int64(v)
+			convertedMap[key] = int64(v)
 		case int32:
-			convertedMap[strKey] = int64(v)
+			convertedMap[key] = int64(v)
 		case []interface{}:
 			dv := make([]interface{}, len(v))
 			for i, ve := range v {
@@ -371,7 +365,7 @@ func ConvertMap(originalData interface{}) (map[string]interface{}, error) {
 				case map[interface{}]interface{}:
 					ivec, err := ConvertMap(ive)
 					if err != nil {
-						return nil, errors.New(fmt.Sprintf("failed to convert for key %s", strKey))
+						return nil, errors.New(fmt.Sprintf("failed to convert for key %s", key))
 					}
 					dv[i] = ivec
 				case int:
@@ -382,10 +376,10 @@ func ConvertMap(originalData interface{}) (map[string]interface{}, error) {
 					dv[i] = ive
 				}
 			}
-			convertedMap[strKey] = dv
+			convertedMap[key] = dv
 		default:
 			// Otherwise, add the key-value pair to the converted map
-			convertedMap[strKey] = v
+			convertedMap[key] = v
 		}
 	}
 

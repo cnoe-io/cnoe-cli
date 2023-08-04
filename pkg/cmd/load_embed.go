@@ -11,7 +11,7 @@ import (
 
 	"github.com/cnoe-io/cnoe-cli/pkg/lib"
 	"github.com/hashicorp/go-multierror"
-	"gopkg.in/yaml.v2"
+	"gopkg.in/yaml.v3"
 )
 
 //go:embed prereq/*

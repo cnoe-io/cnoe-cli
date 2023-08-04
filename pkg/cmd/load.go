@@ -7,7 +7,7 @@ import (
 	"io/ioutil"
 
 	"github.com/cnoe-io/cnoe-cli/pkg/lib"
-	"gopkg.in/yaml.v2"
+	"gopkg.in/yaml.v3"
 )
 
 func load() ([]lib.Config, error) {
