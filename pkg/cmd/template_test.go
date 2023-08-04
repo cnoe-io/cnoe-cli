@@ -11,7 +11,6 @@ import (
 	"github.com/onsi/gomega/gbytes"
 	"gopkg.in/yaml.v3"
 
-	"io/ioutil"
 	"os"
 	"path/filepath"
 )
@@ -39,7 +38,7 @@ var _ = Describe("Template", func() {
 
 	BeforeEach(func() {
 		var err error
-		tempDir, err = ioutil.TempDir("", "test")
+		tempDir, err = os.MkdirTemp("", "test")
 		Expect(err).NotTo(HaveOccurred())
 
 		outputDir = filepath.Join(tempDir, "output")
@@ -64,14 +63,14 @@ var _ = Describe("Template", func() {
 		})
 
 		It("should create the template files for valid definitions", func() {
-			expectedTemplateData, err := ioutil.ReadFile(expectedTemplateFile)
+			expectedTemplateData, err := os.ReadFile(expectedTemplateFile)
 			Expect(err).NotTo(HaveOccurred())
 
 			var expectedTemplate models.Template
 			err = yaml.Unmarshal(expectedTemplateData, &expectedTemplate)
 			Expect(err).NotTo(HaveOccurred())
 
-			generatedTemplateData, err := ioutil.ReadFile(fmt.Sprintf("%s/%s", outputDir, "template.yaml"))
+			generatedTemplateData, err := os.ReadFile(fmt.Sprintf("%s/%s", outputDir, "template.yaml"))
 			Expect(err).NotTo(HaveOccurred())
 
 			var generatedTemplate models.Template
@@ -88,14 +87,14 @@ var _ = Describe("Template", func() {
 
 			filePath := path.Join(resourceDir, files[0].Name())
 			Expect(err).NotTo(HaveOccurred())
-			generatedResourceData, err := ioutil.ReadFile(filePath)
+			generatedResourceData, err := os.ReadFile(filePath)
 			Expect(err).NotTo(HaveOccurred())
 
 			var generatedResource models.Definition
 			err = yaml.Unmarshal(generatedResourceData, &generatedResource)
 			Expect(err).NotTo(HaveOccurred())
 
-			expectedResourceData, err := ioutil.ReadFile(expectedResourceFile)
+			expectedResourceData, err := os.ReadFile(expectedResourceFile)
 			Expect(err).NotTo(HaveOccurred())
 			var expectedResource models.Definition
 			err = yaml.Unmarshal(expectedResourceData, &expectedResource)

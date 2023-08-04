@@ -4,7 +4,7 @@
 package cmd
 
 import (
-	"io/ioutil"
+	"os"
 
 	"github.com/cnoe-io/cnoe-cli/pkg/lib"
 	"gopkg.in/yaml.v3"
@@ -13,7 +13,7 @@ import (
 func load() ([]lib.Config, error) {
 	var configs []lib.Config
 	for _, configPath := range configPaths {
-		yamlFile, err := ioutil.ReadFile(configPath)
+		yamlFile, err := os.ReadFile(configPath)
 		if err != nil {
 			return configs, err
 		}
