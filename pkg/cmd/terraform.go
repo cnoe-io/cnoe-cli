@@ -18,7 +18,7 @@ var (
 		Use:   "tf",
 		Short: "Generate backstage templates from Terraform variables",
 		PreRunE: func(cmd *cobra.Command, args []string) error {
-			if !isDirectory(inputDir) || !isDirectory(outputDir) {
+			if !isDirectory(inputDir) {
 				return errors.New("inputDir and ouputDir entries need to be directories")
 			}
 			return nil
@@ -34,7 +34,7 @@ type BackstageParamFields struct {
 	Description          string                           `yaml:",omitempty"`
 	Default              any                              `yaml:",omitempty"`
 	Items                *BackstageParamFields            `yaml:",omitempty"`
-	UIWidget             string                           `yaml:"ui:widget,omitempty,"`
+	UIWidget             string                           `yaml:"ui:widget,omitempty"`
 	Properties           map[string]*BackstageParamFields `yaml:",omitempty"`
 	AdditionalProperties AdditionalProperties             `yaml:",omitempty"`
 }
@@ -53,7 +53,6 @@ func tfE(cmd *cobra.Command, args []string) error {
 }
 
 func terraform(inputDir string, outputDir string) error {
-
 	mods := getModules(inputDir, 0)
 	if len(mods) == 0 {
 		return fmt.Errorf("could not find any TF modules in given directorr: %s", inputDir)
@@ -79,9 +78,9 @@ func terraform(inputDir string, outputDir string) error {
 			fmt.Println(fmt.Sprintf("failed to marshal %s: %s", path, err))
 			continue
 		}
-		fileName := filepath.Join(outputDir, filepath.Base(inputDir), ".yaml")
-		fmt.Println(b)
-		err = os.WriteFile(fileName, b, 0644)
+		fileName := fmt.Sprintf("%s.yaml", filepath.Base(inputDir))
+		filePath := filepath.Join(outputDir, fileName)
+		err = os.WriteFile(filePath, b, 0644)
 		if err != nil {
 			fmt.Println(fmt.Sprintf("failed to write %s: %s", path, err))
 			continue
@@ -180,11 +179,12 @@ func getNestedType(s string) string {
 		return strings.TrimSuffix(strings.SplitAfterN(s, "object(", 1)[1], ")")
 	}
 	if strings.HasPrefix(s, "map(") {
-		return strings.TrimSuffix(strings.SplitAfterN(s, "map(", 1)[1], ")")
+		fmt.Println(strings.SplitAfterN(s, "map(", 2))
+		return strings.TrimSuffix(strings.SplitAfterN(s, "map(", 2)[1], ")")
 	}
 	if strings.HasPrefix(s, "list(") {
-		fmt.Println(strings.SplitAfterN(s, "list(", 1))
-		return strings.TrimSuffix(strings.SplitAfterN(s, "list(", 1)[1], ")")
+		fmt.Println(strings.SplitAfterN(s, "list(", 2))
+		return strings.TrimSuffix(strings.SplitAfterN(s, "list(", 2)[1], ")")
 	}
 	return s
 }
