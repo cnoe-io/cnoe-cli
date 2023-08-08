@@ -397,15 +397,3 @@ func isXRD(m models.Definition) bool {
 func isCRD(m models.Definition) bool {
 	return m.Kind == KindCRD
 }
-
-func isDirectory(path string) bool {
-	// Get file information
-	info, err := os.Stat(path)
-	if err != nil {
-		// Error occurred, path does not exist or cannot be accessed
-		return false
-	}
-
-	// Check if the path is a directory
-	return info.Mode().IsDir()
-}
