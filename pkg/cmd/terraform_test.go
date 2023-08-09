@@ -4,12 +4,11 @@ import (
 	"context"
 	"fmt"
 
-	. "github.com/onsi/ginkgo/v2"
-	. "github.com/onsi/gomega"
-	"gopkg.in/yaml.v3"
-
 	"os"
 	"path/filepath"
+
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
 )
 
 var _ = Describe("Terraform Template", func() {
@@ -66,15 +65,9 @@ var _ = Describe("Terraform Template", func() {
 		It("should create the template file with properties merged", func() {
 			generatedData, err := os.ReadFile(fmt.Sprintf("%s/input.yaml", outputDir))
 			Expect(err).NotTo(HaveOccurred())
-
 			expectedData, err := os.ReadFile(expectedTemplateFile)
-
-			var generated map[string]any
-			err = yaml.Unmarshal(generatedData, &generated)
-			var expected map[string]any
-			err = yaml.Unmarshal(expectedData, &expected)
 			Expect(err).NotTo(HaveOccurred())
-			Expect(generated).To(Equal(expected))
+			Expect(generatedData).To(MatchYAML(expectedData))
 		})
 
 		It("should create the template file with properties merged and requirements updated", func() {
