@@ -93,6 +93,7 @@ func writeOutput(content any, path string) error {
 	if err != nil {
 		return err
 	}
+	defer f.Close()
 	enc := yamlv3.NewEncoder(f)
 	defer enc.Close()
 	enc.SetIndent(2)
