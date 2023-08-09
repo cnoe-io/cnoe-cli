@@ -3,6 +3,7 @@ package cmd
 import (
 	"fmt"
 
+	"github.com/cnoe-io/cnoe-cli/pkg/models"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"gopkg.in/yaml.v2"
@@ -55,9 +56,9 @@ var _ = Describe("Terraform Template", func() {
 
 			expectedData, err := os.ReadFile(expectedTemplateFile)
 
-			var generated map[string]BackstageParamFields
+			var generated map[string]models.BackstageParamFields
 			err = yaml.Unmarshal(generatedData, &generated)
-			var expected map[string]BackstageParamFields
+			var expected map[string]models.BackstageParamFields
 			err = yaml.Unmarshal(expectedData, &expected)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(generated).To(Equal(expected))
