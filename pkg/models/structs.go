@@ -88,7 +88,7 @@ type BackstageParamFields struct {
 	Items                *BackstageParamFields            `yaml:",omitempty"`
 	UIWidget             string                           `yaml:"ui:widget,omitempty"`
 	Properties           map[string]*BackstageParamFields `yaml:"UiWidget,omitempty"`
-	AdditionalProperties AdditionalProperties             `yaml:"additionalProperties,omitempty"`
+	AdditionalProperties *AdditionalProperties            `yaml:"additionalProperties,omitempty"`
 	UniqueItems          *bool                            `yaml:",omitempty"` // This does not guarantee a set. Works for primitives only.
 }
 

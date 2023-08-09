@@ -1,12 +1,13 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/cnoe-io/cnoe-cli/pkg/models"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"gopkg.in/yaml.v2"
+	"gopkg.in/yaml.v3"
 
 	"os"
 	"path/filepath"
@@ -45,7 +46,7 @@ var _ = Describe("Terraform Template", func() {
 
 	Context("with valid input", func() {
 		BeforeEach(func() {
-			err := terraform(inputDir, outputDir)
+			err := terraform(context.Background(), inputDir, outputDir)
 
 			Expect(err).NotTo(HaveOccurred())
 		})

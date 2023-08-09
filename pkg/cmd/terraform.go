@@ -1,8 +1,10 @@
 package cmd
 
 import (
+	"context"
 	"errors"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"strings"
@@ -10,7 +12,7 @@ import (
 	"github.com/cnoe-io/cnoe-cli/pkg/models"
 	"github.com/hashicorp/terraform-config-inspect/tfconfig"
 	"github.com/spf13/cobra"
-	"gopkg.in/yaml.v2"
+	"gopkg.in/yaml.v3"
 )
 
 var (
@@ -25,19 +27,22 @@ var (
 		},
 		RunE: tfE,
 	}
-	depth uint32
+	depth          uint32
+	insertionPoint string
 )
 
 func init() {
 	tfCmd.Flags().Uint32Var(&depth, "depth", 2, "depth from given directory to search for TF modules")
+	tfCmd.Flags().StringVarP(&templatePath, "templatePath", "t", "scaffolding/template.yaml", "path to the template to be augmented with backstage info")
+	tfCmd.Flags().StringVarP(&insertionPoint, "insertAt", "p", "", "jq path within the template to insert backstage info")
 	templateCmd.AddCommand(tfCmd)
 }
 
 func tfE(cmd *cobra.Command, args []string) error {
-	return terraform(inputDir, outputDir)
+	return terraform(cmd.Context(), inputDir, outputDir)
 }
 
-func terraform(inputDir string, outputDir string) error {
+func terraform(ctx context.Context, inputDir string, outputDir string) error {
 	mods := getModules(inputDir, 0)
 	if len(mods) == 0 {
 		return fmt.Errorf("could not find any TF modules in given directorr: %s", inputDir)
@@ -53,24 +58,50 @@ func terraform(inputDir string, outputDir string) error {
 			fmt.Println(fmt.Sprintf("module %s does not have variables", path))
 			continue
 		}
-		properties := make(map[string]models.BackstageParamFields)
+		params := make(map[string]models.BackstageParamFields)
+		required := make([]string, 0)
 		for j := range mod.Variables {
-			properties[j] = convertVariable(*mod.Variables[j])
+			params[j] = convertVariable(*mod.Variables[j])
+			if mod.Variables[j].Required {
+				required = append(required, j)
+			}
 		}
-		b, err := yaml.Marshal(properties)
+		filePath := filepath.Join(outputDir, fmt.Sprintf("%s.yaml", filepath.Base(inputDir)))
+		err := handleOutput(ctx, filePath, params, required)
 		if err != nil {
-			fmt.Println(fmt.Sprintf("failed to marshal %s: %s", path, err))
-			continue
-		}
-		fileName := fmt.Sprintf("%s.yaml", filepath.Base(inputDir))
-		filePath := filepath.Join(outputDir, fileName)
-		err = os.WriteFile(filePath, b, 0644)
-		if err != nil {
-			fmt.Println(fmt.Sprintf("failed to write %s: %s", path, err))
-			continue
+			log.Println(err)
 		}
 	}
 	return nil
+}
+
+func handleOutput(ctx context.Context, outputFile string, properties map[string]models.BackstageParamFields, required []string) error {
+	if templatePath != "" && insertionPoint != "" {
+		input := insertAtInput{
+			templatePath:     templatePath,
+			jqPathExpression: insertionPoint,
+			properties:       properties,
+			required:         required,
+		}
+		t, err := insertAt(ctx, input)
+		if err != nil {
+			return fmt.Errorf("failed to insert to given template: %s", err)
+		}
+		b, err := yaml.Marshal(t)
+		if err != nil {
+			return err
+		}
+		return os.WriteFile(outputFile, b, 0644)
+	}
+	t := map[string]any{
+		"properties": properties,
+		"required":   required,
+	}
+	b, err := yaml.Marshal(t)
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(outputFile, b, 0644)
 }
 
 func getModules(inputDir string, currentDepth uint32) []string {
@@ -167,7 +198,8 @@ func convertObject(tfVar tfconfig.Variable) models.BackstageParamFields {
 
 	nestedType := getNestedType(cleanString(tfVar.Type))
 	if isPrimitive(nestedType) {
-		out.AdditionalProperties = models.AdditionalProperties{Type: mapType(nestedType)}
+		p := models.AdditionalProperties{Type: mapType(nestedType)}
+		out.AdditionalProperties = &p
 		// defaults for object type is broken in Backstage atm. In the UI, the default values cannot be removed.
 		//properties := convertObjectDefaults(tfVar)
 		//if len(properties) > 0 {
