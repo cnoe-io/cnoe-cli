@@ -3,7 +3,6 @@ package cmd
 import (
 	"fmt"
 
-	"github.com/cnoe-io/cnoe-cli/pkg/models"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"gopkg.in/yaml.v2"
@@ -24,8 +23,7 @@ var _ = Describe("Terraform Template", func() {
 		templateDescription = "test-description"
 
 		inputDir             = "./fakes/terraform/valid/input"
-		templateFile         = "./fakes/template/input-template.yaml"
-		expectedTemplateFile = "./fakes/template/output-template.yaml"
+		expectedTemplateFile = "./fakes/terraform/valid/output/properties.yaml"
 		expectedResourceFile = "./fakes/terraform/valid/output"
 	)
 
@@ -52,20 +50,17 @@ var _ = Describe("Terraform Template", func() {
 		})
 
 		It("should create the template files for valid definitions", func() {
-			expectedTemplateData, err := os.ReadFile(expectedTemplateFile)
+			generatedData, err := os.ReadFile(fmt.Sprintf("%s/input.yaml", outputDir))
 			Expect(err).NotTo(HaveOccurred())
 
-			var expectedTemplate models.Template
-			err = yaml.Unmarshal(expectedTemplateData, &expectedTemplate)
-			Expect(err).NotTo(HaveOccurred())
+			expectedData, err := os.ReadFile(expectedTemplateFile)
 
-			generatedTemplateData, err := os.ReadFile(fmt.Sprintf("%s/%s", outputDir, "template.yaml"))
+			var generated map[string]BackstageParamFields
+			err = yaml.Unmarshal(generatedData, &generated)
+			var expected map[string]BackstageParamFields
+			err = yaml.Unmarshal(expectedData, &expected)
 			Expect(err).NotTo(HaveOccurred())
-
-			var generatedTemplate models.Template
-			err = yaml.Unmarshal(generatedTemplateData, &generatedTemplate)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(generatedTemplate).To(Equal(expectedTemplate))
+			Expect(generated).To(Equal(expected))
 		})
 	})
 })

@@ -12,7 +12,6 @@ import (
 	"gopkg.in/yaml.v2"
 )
 
-// tfCmd represents the tf command
 var (
 	tfCmd = &cobra.Command{
 		Use:   "tf",
@@ -35,11 +34,12 @@ type BackstageParamFields struct {
 	Default              any                              `yaml:",omitempty"`
 	Items                *BackstageParamFields            `yaml:",omitempty"`
 	UIWidget             string                           `yaml:"ui:widget,omitempty"`
-	Properties           map[string]*BackstageParamFields `yaml:",omitempty"`
-	AdditionalProperties AdditionalProperties             `yaml:",omitempty"`
+	Properties           map[string]*BackstageParamFields `yaml:"UiWidget,omitempty"`
+	AdditionalProperties AdditionalProperties             `yaml:"additionalProperties,omitempty"`
+	UniqueItems          *bool                            `yaml:",omitempty"` // This does not guarantee a set. Works for primitives only.
 }
 
-type AdditionalProperties struct {
+type AdditionalProperties struct { // technically any but for our case, it should be a type: string
 	Type string `yaml:",omitempty"`
 }
 
@@ -70,8 +70,7 @@ func terraform(inputDir string, outputDir string) error {
 		}
 		properties := make(map[string]BackstageParamFields)
 		for j := range mod.Variables {
-			field := convertVariable(*mod.Variables[j])
-			properties[j] = field
+			properties[j] = convertVariable(*mod.Variables[j])
 		}
 		b, err := yaml.Marshal(properties)
 		if err != nil {
@@ -110,52 +109,97 @@ func getModules(inputDir string, currentDepth uint32) []string {
 func convertVariable(tfVar tfconfig.Variable) BackstageParamFields {
 	tfType := cleanString(tfVar.Type)
 	t := mapType(tfType)
-	b := BackstageParamFields{
-		Type: t,
-	}
-	if tfVar.Description != "" {
-		b.Description = tfVar.Description
-	}
-	if tfVar.Default != nil {
-		b.Default = tfVar.Default
+	if isPrimitive(tfType) {
+		b := BackstageParamFields{
+			Type: t,
+		}
+		if tfVar.Description != "" {
+			b.Description = tfVar.Description
+		}
+		if tfVar.Default != nil {
+			b.Default = tfVar.Default
+		}
+		return b
 	}
 
-	if !isPrimitive(tfType) {
-		if strings.HasPrefix(tfType, "list") {
-			b.Items = convertArray(tfVar)
-		}
-		if strings.HasPrefix(tfType, "map") || strings.HasPrefix(tfType, "object") {
-			properties := convertObject(tfVar)
-			b.Properties = map[string]*BackstageParamFields{
-				tfVar.Name: properties,
-			}
-		}
+	if t == "array" {
+		return convertArray(tfVar)
 	}
-	return b
+	if t == "object" {
+		return convertObject(tfVar)
+	}
+	return BackstageParamFields{}
 }
 
-func convertArray(tfVar tfconfig.Variable) *BackstageParamFields {
-	nestedType := getNestedType(cleanString(tfVar.Type))
+func convertArray(tfVar tfconfig.Variable) BackstageParamFields {
+	tfType := cleanString(tfVar.Type)
+	nestedType := getNestedType(tfType)
 	nestedTfVar := tfconfig.Variable{
+		Name: fmt.Sprintf("%s-a", tfVar.Name),
 		Type: nestedType,
 	}
 	nestedItems := convertVariable(nestedTfVar)
-
-	return &BackstageParamFields{
-		Type:  "array",
-		Items: &nestedItems,
+	out := BackstageParamFields{
+		Type:        "array",
+		Description: tfVar.Description,
+		Default:     tfVar.Default,
+		Items:       &nestedItems,
 	}
+	if strings.HasPrefix(tfType, "set") {
+		u := true
+		out.UniqueItems = &u
+	}
+	return out
 }
 
-func convertObject(tfVar tfconfig.Variable) *BackstageParamFields {
+func convertObjectDefaults(tfVar tfconfig.Variable) map[string]*BackstageParamFields {
+	// build default values by taking default's key and type. Must be done for primitives only.
+	properties := make(map[string]*BackstageParamFields)
 	nestedType := getNestedType(cleanString(tfVar.Type))
-	name := fmt.Sprintf("%s-n", tfVar.Name)
-	nestedTfVar := tfconfig.Variable{
-		Name: name,
-		Type: nestedType,
+	if tfVar.Default != nil {
+		d, ok := tfVar.Default.(map[string]any)
+		if !ok {
+			fmt.Println(fmt.Sprintf("could not determine default type of %s", tfVar.Default))
+		}
+		for k := range d {
+			defaultProp := convertVariable(tfconfig.Variable{
+				Name:    k,
+				Type:    nestedType,
+				Default: d[k],
+			})
+			properties[k] = &defaultProp
+		}
 	}
-	converted := convertVariable(nestedTfVar)
-	return &converted
+	return properties
+}
+
+func convertObject(tfVar tfconfig.Variable) BackstageParamFields {
+	out := BackstageParamFields{
+		Title:       tfVar.Name,
+		Type:        mapType(cleanString(tfVar.Type)),
+		Description: tfVar.Description,
+	}
+
+	nestedType := getNestedType(cleanString(tfVar.Type))
+	if isPrimitive(nestedType) {
+		out.AdditionalProperties = AdditionalProperties{Type: mapType(nestedType)}
+		// defaults for object type is broken in Backstage atm. In the UI, the default values cannot be removed.
+		//properties := convertObjectDefaults(tfVar)
+		//if len(properties) > 0 {
+		//	out.Properties = properties
+		//}
+	} else {
+		name := fmt.Sprintf("%s-n", tfVar.Name)
+		nestedTfVar := tfconfig.Variable{
+			Name: name,
+			Type: nestedType,
+		}
+		converted := convertVariable(nestedTfVar)
+		out.Properties = map[string]*BackstageParamFields{
+			name: &converted,
+		}
+	}
+	return out
 }
 
 func cleanString(input string) string {
@@ -179,18 +223,15 @@ func getNestedType(s string) string {
 		return strings.TrimSuffix(strings.SplitAfterN(s, "object(", 1)[1], ")")
 	}
 	if strings.HasPrefix(s, "map(") {
-		fmt.Println(strings.SplitAfterN(s, "map(", 2))
 		return strings.TrimSuffix(strings.SplitAfterN(s, "map(", 2)[1], ")")
 	}
 	if strings.HasPrefix(s, "list(") {
-		fmt.Println(strings.SplitAfterN(s, "list(", 2))
 		return strings.TrimSuffix(strings.SplitAfterN(s, "list(", 2)[1], ")")
 	}
 	return s
 }
 
 func mapType(tfType string) string {
-
 	switch {
 	case tfType == "string":
 		return "string"
@@ -200,7 +241,7 @@ func mapType(tfType string) string {
 		return "boolean"
 	case strings.HasPrefix(tfType, "object"), strings.HasPrefix(tfType, "map"):
 		return "object"
-	case strings.HasPrefix(tfType, "list"):
+	case strings.HasPrefix(tfType, "list"), strings.HasPrefix(tfType, "set"):
 		return "array"
 	default:
 		return "string"
