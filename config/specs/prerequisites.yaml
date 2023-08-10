@@ -1,0 +1,97 @@
+openapi: "3.0.0"
+info:
+  version: "0.0.1"
+  title: "CNOE Prerequisites API"
+  description: "API for cnoe.io Prerequisite objects"
+
+paths: {}
+
+components:
+  schemas:
+
+    Prerequisite:
+      type: "object"
+      required:
+        - apiVersion
+        - kind
+        - metadata
+        - spec
+      properties:
+        apiVersion:
+          type: "string"
+          example: "cnoe.io/v1alpha1"
+        kind:
+          type: "string"
+          example: "Prerequisite"
+        metadata:
+          $ref: "#/components/schemas/Metadata"
+        spec:
+          $ref: "#/components/schemas/Spec"
+
+    Metadata:
+      type: "object"
+      required:
+        - name
+      properties:
+        name:
+          type: "string"
+          example: "ack-s3"
+        annotations:
+          type: "array"
+          items:
+            $ref: "#/components/schemas/Annotation"
+
+    Annotation:
+      type: "object"
+      required:
+        - key
+        - value
+      properties:
+        key:
+          type: "string"
+        value:
+          type: "string"
+
+    Spec:
+      type: "object"
+      minProperties: 1
+      properties:
+        pods:
+          type: "array"
+          items:
+            $ref: "#/components/schemas/Pod"
+        crds:
+          type: "array"
+          items:
+            $ref: "#/components/schemas/CRD"
+
+    Pod:
+      type: "object"
+      required:
+        - name
+      properties:
+        name:
+          type: "string"
+          example: "ack-release-s3"
+        namespace:
+          type: "string"
+          example: "ack-system"
+        state:
+          type: "string"
+          example: "Running"
+          enum: ["Running", "Pending", "Terminating", "Failed"]
+
+    CRD:
+      type: "object"
+      required:
+        - group
+        - kind
+        - version
+      properties:
+        group:
+          type: "string"
+        kind:
+          type: "string"
+        version:
+          type: "string"
+
