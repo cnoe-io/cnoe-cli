@@ -168,7 +168,8 @@ var _ = Describe("Verify", func() {
 						Spec: lib.Spec{
 							Pods: []lib.Pod{
 								{
-									Name: "test-pod",
+									Name:  "test-pod",
+									State: "Running",
 								},
 							},
 						},
@@ -202,17 +203,54 @@ var _ = Describe("Verify", func() {
 					podList.Items[1].Status.Phase = corev1.PodFailed
 				})
 
-				It("indicates that the pod failed", func() {
-					err := cmd.Verify(stdout, stderr, fakeK8sClient, *cfg)
-					Expect(err).To(HaveOccurred())
+				Context("when expecting running pods", func() {
+					It("indicates that the pod failed", func() {
+						err := cmd.Verify(stdout, stderr, fakeK8sClient, *cfg)
+						Expect(err).To(HaveOccurred())
 
-					Expect(string(stdout.Contents())).To(ContainSubstring("X"))
-					splitString := strings.Split(strings.Trim(string(stdout.Contents()), "\n"), "\n")
-					Expect(splitString).To(HaveLen(2))
-					Expect(splitString).Should(ConsistOf(
-						ContainSubstring("ns1, Pod=test-pod-1 - Failed"),
-						ContainSubstring("ns2, Pod=test-pod-2 - Failed"),
-					))
+						Expect(string(stdout.Contents())).To(ContainSubstring("X"))
+						splitString := strings.Split(strings.Trim(string(stdout.Contents()), "\n"), "\n")
+						Expect(splitString).To(HaveLen(2))
+						Expect(splitString).Should(ConsistOf(
+							ContainSubstring("ns1, Pod=test-pod-1 - Failed != Running"),
+							ContainSubstring("ns2, Pod=test-pod-2 - Failed != Running"),
+						))
+					})
+				})
+
+				Context("when expecting failed pods", func() {
+					BeforeEach(func() {
+						cfg = &[]lib.Config{
+							{
+								ApiVersion: "cnoe.io/v1alpha1",
+								Kind:       "Prerequisite",
+								Metadata: lib.Metadata{
+									Name: "test-prereq",
+								},
+								Spec: lib.Spec{
+									Pods: []lib.Pod{
+										{
+											Name:  "test-pod",
+											State: "Failed",
+										},
+									},
+								},
+							},
+						}
+					})
+
+					It("successfully verifies matching pods", func() {
+						err := cmd.Verify(stdout, stderr, fakeK8sClient, *cfg)
+						Expect(err).NotTo(HaveOccurred())
+						Expect(string(stdout.Contents())).To(ContainSubstring("✓"))
+
+						splitString := strings.Split(strings.Trim(string(stdout.Contents()), "\n"), "\n")
+						Expect(splitString).To(HaveLen(2))
+						Expect(splitString).Should(ConsistOf(
+							ContainSubstring("ns1, Pod=test-pod-1 - Failed"),
+							ContainSubstring("ns2, Pod=test-pod-2 - Failed"),
+						))
+					})
 				})
 			})
 		})
@@ -231,6 +269,7 @@ var _ = Describe("Verify", func() {
 								{
 									Name:      "test-pod",
 									Namespace: "ns1",
+									State:     "Running",
 								},
 							},
 						},

@@ -9,7 +9,6 @@ import (
 	"github.com/cnoe-io/cnoe-cli/pkg/lib"
 	"github.com/hashicorp/go-multierror"
 	"github.com/spf13/cobra"
-	v1 "k8s.io/api/core/v1"
 )
 
 const (
@@ -91,10 +90,10 @@ func Verify(stdout, stderr io.Writer, cli lib.IK8sClient, configs []lib.Config) 
 
 				if strings.Contains(p.GetName(), pid.Name) {
 					found = true
-					if p.Status.Phase == v1.PodRunning {
+					if string(p.Status.Phase) == pid.State {
 						fmt.Fprintf(stdout, "%s %s - %s, Pod=%s - %s\n", green("✓"), config.Metadata.Name, p.GetNamespace(), p.GetName(), p.Status.Phase)
 					} else {
-						fmt.Fprintf(stdout, "%s %s - %s, Pod=%s - %s\n", red("X"), config.Metadata.Name, p.GetNamespace(), p.GetName(), p.Status.Phase)
+						fmt.Fprintf(stdout, "%s %s - %s, Pod=%s - %s != %s \n", red("X"), config.Metadata.Name, p.GetNamespace(), p.GetName(), p.Status.Phase, pid.State)
 						result = multierror.Append(result, errors.New(fmt.Sprintf("%s, Pod=%s failed", p.GetNamespace(), p.GetName())))
 					}
 				}

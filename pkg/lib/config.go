@@ -9,6 +9,7 @@ type CRD struct {
 type Pod struct {
 	Name      string `yaml:"name"`
 	Namespace string `yaml:"namespace"`
+	State     string `yaml:"state"`
 }
 
 type Spec struct {
