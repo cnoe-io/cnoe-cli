@@ -18,6 +18,11 @@ var (
 	tfCmd = &cobra.Command{
 		Use:   "tf",
 		Short: "Generate backstage templates from Terraform variables",
+		Long: "Generate backstage templates by walking the given input directory, find TF modules," +
+			"then create output file per module.\n" +
+			"If the templatePath and insertionPoint flags are set, generated objects are merged into the given template at given insertion point.\n" +
+			"Otherwise a yaml file with two keys are generated. The properties key contains the generated form input. " +
+			"The required key contains the TF variable names that do not have defaults.",
 		PreRunE: func(cmd *cobra.Command, args []string) error {
 			if !isDirectory(inputDir) {
 				return errors.New("inputDir and ouputDir entries need to be directories")
