@@ -34,7 +34,6 @@ var (
 
 func init() {
 	templateCmd.AddCommand(crdCmd)
-	crdCmd.Flags().StringVarP(&templatePath, "templatePath", "t", "scaffolding/template.yaml", "path to the template to be augmented with backstage info")
 	crdCmd.Flags().StringArrayVarP(&verifiers, "verifier", "v", []string{}, "list of verifiers to test the resource against")
 	crdCmd.Flags().BoolVarP(&namespaced, "namespaced", "n", false, "whether or not resources are namespaced")
 

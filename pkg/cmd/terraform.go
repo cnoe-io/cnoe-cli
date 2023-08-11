@@ -31,10 +31,7 @@ var (
 )
 
 func init() {
-	tfCmd.Flags().Uint32Var(&depth, "depth", 2, "depth from given directory to search for TF modules")
-	tfCmd.Flags().StringVarP(&templatePath, "templatePath", "t", "scaffolding/template.yaml", "path to the template to be augmented with backstage info")
-	tfCmd.Flags().StringVarP(&insertionPoint, "insertAt", "p", "", "jq path within the template to insert backstage info")
-	crdCmd.AddCommand(tfCmd)
+	templateCmd.AddCommand(tfCmd)
 }
 
 func tfE(cmd *cobra.Command, args []string) error {
