@@ -2,7 +2,8 @@
 
 set -e -x -u
 
-# go test ./...
+go mod tidy
+go test ./...
 go fmt ./cmd/... ./pkg/...
 
 # build without website assets

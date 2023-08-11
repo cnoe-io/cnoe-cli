@@ -29,11 +29,11 @@ var _ = Describe("Template", func() {
 		templateTitle       = "test-title"
 		templateDescription = "test-description"
 
-		inputDir             = "./fakes/in-resource"
-		invalidInputDir      = "./fakes/invalid-in-resource"
+		inputDir             = "./fakes/crd/in-resource"
+		invalidInputDir      = "./fakes/crd/invalid-in-resource"
+		expectedResourceFile = "./fakes/crd/out-resource/output-resource.yaml"
 		templateFile         = "./fakes/template/input-template.yaml"
 		expectedTemplateFile = "./fakes/template/output-template.yaml"
-		expectedResourceFile = "./fakes/out-resource/output-resource.yaml"
 	)
 
 	BeforeEach(func() {
