@@ -79,7 +79,10 @@ func Crd(
 	verifiers []string, namespaced bool,
 	templateName, templateTitle, templateDescription string,
 ) error {
-	defs := defs(inputDir, 0)
+	defs, err := getDefs(inputDir, 0)
+	if err != nil {
+		return err
+	}
 
 	output, err := writeSchema(
 		stdout, stderr,
@@ -107,26 +110,33 @@ func Crd(
 	return nil
 }
 
-func defs(dir string, depth int) []string {
-	if depth > 2 {
-		return nil
+func getDefs(inputDir string, currentDepth uint32) ([]string, error) {
+	if currentDepth > depth {
+		return nil, nil
 	}
+	out, err := getRelevantFiles(inputDir, currentDepth, findDefs)
+	if err != nil {
+		return nil, err
+	}
+	return out, err
+}
 
-	var out []string
-	base, _ := filepath.Abs(dir)
-	files, _ := os.ReadDir(base)
-	for _, file := range files {
-		f := filepath.Join(base, file.Name())
-		stat, _ := os.Stat(f)
-		if stat.IsDir() {
-			out = append(out, defs(f, depth+1)...)
-			continue
+func findDefs(file os.DirEntry, currentDepth uint32, base string) ([]string, error) {
+	a := file.Name()
+	fmt.Println(a)
+	f := filepath.Join(base, file.Name())
+	stat, err := os.Stat(f)
+	if err != nil {
+		return nil, err
+	}
+	if stat.IsDir() {
+		df, err := getDefs(f, currentDepth+1)
+		if err != nil {
+			return nil, err
 		}
-
-		out = append(out, f)
+		return df, nil
 	}
-
-	return out
+	return []string{f}, nil
 }
 
 func writeSchema(stdout, stderr io.Writer, outputDir string, defs []string) (cmdOutput, error) {

@@ -44,7 +44,10 @@ func tfE(cmd *cobra.Command, args []string) error {
 }
 
 func terraform(ctx context.Context, inputDir, outputDir, templatePath, insertionPoint string) error {
-	mods := getModules(inputDir, 0)
+	mods, err := getModules(inputDir, 0)
+	if err != nil {
+		return err
+	}
 	if len(mods) == 0 {
 		return fmt.Errorf("could not find any TF modules in given directorr: %s", inputDir)
 	}
@@ -97,22 +100,34 @@ func handleOutput(ctx context.Context, outputFile, templatePath, insertionPoint 
 	return writeOutput(t, outputFile)
 }
 
-func getModules(inputDir string, currentDepth uint32) []string {
+func getModules(inputDir string, currentDepth uint32) ([]string, error) {
 	if currentDepth > depth {
-		return nil
+		return nil, nil
 	}
 	if tfconfig.IsModuleDir(inputDir) {
-		return []string{inputDir}
+		return []string{inputDir}, nil
 	}
-	base, _ := filepath.Abs(inputDir)
-	files, _ := os.ReadDir(base)
-	out := make([]string, 1)
-	for _, file := range files {
-		f := filepath.Join(base, file.Name())
-		mods := getModules(f, currentDepth+1)
-		out = append(out, mods...)
+	out, err := getRelevantFiles(inputDir, currentDepth, findModule)
+	if err != nil {
+		return nil, err
 	}
-	return out
+	return out, nil
+}
+
+func findModule(file os.DirEntry, currentDepth uint32, base string) ([]string, error) {
+	f := filepath.Join(base, file.Name())
+	stat, err := os.Stat(f)
+	if err != nil {
+		return nil, err
+	}
+	if stat.IsDir() {
+		mods, err := getModules(f, currentDepth+1)
+		if err != nil {
+			return nil, err
+		}
+		return mods, nil
+	}
+	return nil, nil
 }
 
 func convertVariable(tfVar tfconfig.Variable) models.BackstageParamFields {
@@ -194,6 +209,7 @@ func convertObject(tfVar tfconfig.Variable) models.BackstageParamFields {
 		p := models.AdditionalProperties{Type: mapType(nestedType)}
 		out.AdditionalProperties = &p
 		// defaults for object type is broken in Backstage atm. In the UI, the default values cannot be removed.
+		// we will enable this once it's fixed in Backstage.
 		//properties := convertObjectDefaults(tfVar)
 		//if len(properties) > 0 {
 		//	out.Properties = properties

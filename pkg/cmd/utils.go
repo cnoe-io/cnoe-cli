@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/cnoe-io/cnoe-cli/pkg/models"
@@ -12,6 +13,8 @@ import (
 	yamlv3 "gopkg.in/yaml.v3"
 	"sigs.k8s.io/yaml"
 )
+
+type finder func(file os.DirEntry, currentDepth uint32, base string) ([]string, error)
 
 type NotFoundError struct {
 	Err error
@@ -98,4 +101,24 @@ func writeOutput(content any, path string) error {
 	defer enc.Close()
 	enc.SetIndent(2)
 	return enc.Encode(content)
+}
+
+func getRelevantFiles(inputDir string, currentDepth uint32, f finder) ([]string, error) {
+	base, err := filepath.Abs(inputDir)
+	if err != nil {
+		return nil, err
+	}
+	files, err := os.ReadDir(base)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]string, 0)
+	for _, file := range files {
+		o, err := f(file, currentDepth, base)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, o...)
+	}
+	return out, nil
 }
