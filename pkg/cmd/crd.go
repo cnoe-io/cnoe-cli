@@ -118,12 +118,10 @@ func getDefs(inputDir string, currentDepth uint32) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	return out, err
+	return out, nil
 }
 
 func findDefs(file os.DirEntry, currentDepth uint32, base string) ([]string, error) {
-	a := file.Name()
-	fmt.Println(a)
 	f := filepath.Join(base, file.Name())
 	stat, err := os.Stat(f)
 	if err != nil {
