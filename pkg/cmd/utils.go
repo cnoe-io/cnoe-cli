@@ -3,12 +3,10 @@ package cmd
 import (
 	"context"
 	"fmt"
-	"log"
 	"os"
 	"path/filepath"
 	"strings"
 
-	"github.com/cnoe-io/cnoe-cli/pkg/models"
 	"github.com/itchyny/gojq"
 	yamlv3 "gopkg.in/yaml.v3"
 	"sigs.k8s.io/yaml"
@@ -27,8 +25,13 @@ func (n NotFoundError) Error() string {
 type insertAtInput struct {
 	templatePath     string
 	jqPathExpression string
-	properties       map[string]models.BackstageParamFields
+	properties       supportedFields
 	required         []string
+}
+
+type supportedFields struct {
+	Properties   any `yaml:",omitempty"`
+	Dependencies any `yaml:",omitempty"`
 }
 
 func isDirectory(path string) bool {
@@ -38,9 +41,81 @@ func isDirectory(path string) bool {
 		// Error occurred, path does not exist or cannot be accessed
 		return false
 	}
-
 	// Check if the path is a directory
 	return info.Mode().IsDir()
+}
+
+func checkAndCreateDir(path string) error {
+	_, err := os.Stat(path)
+	if os.IsNotExist(err) {
+		return os.MkdirAll(path, 0755)
+	}
+	return nil
+}
+
+// return absolute path for given input and output dirs, if output path does not exist, create it.
+func prepDirectories(inputDir, outputDir string, oneOf bool) (string, string, error) {
+	input, err := filepath.Abs(inputDir)
+	if err != nil {
+		return "", "", err
+	}
+	output, err := filepath.Abs(outputDir)
+	if err != nil {
+		return "", "", err
+	}
+	m := output
+	if oneOf {
+		m = fmt.Sprintf("%s/resources", output)
+	}
+	err = checkAndCreateDir(m)
+	if err != nil {
+		return "", "", err
+	}
+	return input, output, nil
+}
+
+func handleOneOf(ctx context.Context, outputFile, templatePath, insertionPoint string, resourceFiles []string) error {
+	input := insertAtInput{
+		templatePath:     templatePath,
+		jqPathExpression: insertionPoint,
+	}
+	t, err := oneOf(ctx, resourceFiles, input)
+	if err != nil {
+		return err
+	}
+	return writeOutput(t, outputFile)
+}
+
+func oneOf(ctx context.Context, resourceFiles []string, input insertAtInput) (any, error) {
+	resourcesPath := fmt.Sprintf(input.templatePath, "/resources")
+	err := os.MkdirAll(resourcesPath, 0755)
+	if err != nil {
+		return nil, err
+	}
+	n := make([]string, len(resourceFiles))
+	m := make([]map[string]string, len(resourceFiles))
+	for i := range resourceFiles {
+		fileName := filepath.Base(resourceFiles[i])
+		n[i] = fileName
+		m[i] = map[string]string{
+			"$yaml": fmt.Sprintf("resources/%s.yaml", fileName),
+		}
+	}
+	props := map[string]any{
+		"resources": map[string]any{
+			"type": "string",
+			"enum": n,
+		},
+	}
+	deps := map[string]any{
+		"resources": map[string][]map[string]string{
+			"oneOf": m,
+		},
+	}
+	input.properties.Properties = props
+	input.properties.Dependencies = deps
+
+	return insertAt(ctx, input)
 }
 
 func jsonFromObject(obj any) ([]byte, error) {
@@ -69,7 +144,7 @@ func insertAt(ctx context.Context, input insertAtInput) (any, error) {
 
 	var sb strings.Builder
 	// update the properties field. merge (*) then assign (=)
-	sb.WriteString(fmt.Sprintf("%s.properties = %s.properties * %s", input.jqPathExpression, input.jqPathExpression, string(jqProp)))
+	sb.WriteString(fmt.Sprintf("%s = %s * %s", input.jqPathExpression, input.jqPathExpression, string(jqProp)))
 	if len(input.required) > 0 {
 		jqReq, err := jsonFromObject(input.required)
 		if err != nil {
@@ -81,12 +156,12 @@ func insertAt(ctx context.Context, input insertAtInput) (any, error) {
 	}
 	query, err := gojq.Parse(sb.String())
 	if err != nil {
-		log.Fatalln(err)
+		return nil, err
 	}
 	iter := query.RunWithContext(ctx, targetTemplate)
 	v, _ := iter.Next()
 	if err, ok := v.(error); ok {
-		log.Fatalln(err)
+		return nil, err
 	}
 	return v, nil
 }

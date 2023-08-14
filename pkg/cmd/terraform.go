@@ -31,8 +31,6 @@ var (
 		},
 		RunE: tfE,
 	}
-	depth          uint32
-	insertionPoint string
 )
 
 func init() {
@@ -40,52 +38,82 @@ func init() {
 }
 
 func tfE(cmd *cobra.Command, args []string) error {
-	return terraform(cmd.Context(), inputDir, outputDir, templatePath, insertionPoint)
+	return terraform(cmd.Context(), inputDir, outputDir, templatePath, insertionPoint, useOneOf)
 }
 
-func terraform(ctx context.Context, inputDir, outputDir, templatePath, insertionPoint string) error {
-	mods, err := getModules(inputDir, 0)
+func terraform(ctx context.Context, inputDir, outputDir, templatePath, insertionPoint string, useOneOf bool) error {
+	inDir, outDir, err := prepDirectories(inputDir, outputDir, useOneOf)
+	templatePathAbs, err := filepath.Abs(templatePath)
+	if err != nil {
+		return err
+	}
+	mods, err := getModules(inDir, 0)
 	if err != nil {
 		return err
 	}
 	if len(mods) == 0 {
-		return fmt.Errorf("could not find any TF modules in given directorr: %s", inputDir)
+		return fmt.Errorf("could not find any TF modules in given directorr: %s", inDir)
 	}
-
+	log.Printf("processing %d modules", len(mods))
 	for i := range mods {
 		path := mods[i]
+		log.Printf("processing module at %s", path)
 		mod, diag := tfconfig.LoadModule(path)
 		if diag.HasErrors() {
 			return diag.Err()
 		}
 		if len(mod.Variables) == 0 {
-			fmt.Println(fmt.Sprintf("module %s does not have variables", path))
+			log.Printf(fmt.Sprintf("module %s does not have variables", path))
 			continue
 		}
 		params := make(map[string]models.BackstageParamFields)
 		required := make([]string, 0)
+		log.Printf("converting %d variables", len(mod.Variables))
 		for j := range mod.Variables {
 			params[j] = convertVariable(*mod.Variables[j])
 			if mod.Variables[j].Required {
 				required = append(required, j)
 			}
 		}
-		filePath := filepath.Join(outputDir, fmt.Sprintf("%s.yaml", filepath.Base(path)))
-		err := handleOutput(ctx, filePath, templatePath, insertionPoint, params, required)
-		if err != nil {
-			log.Println(err)
+		var sb strings.Builder
+		if useOneOf {
+			sb.WriteString(filepath.Join(outDir, "resources", fmt.Sprintf("%s.yaml", filepath.Base(path))))
+			log.Printf("writing to %s", sb.String())
+			err := handleOutput(ctx, sb.String(), "", "", params, required)
+			if err != nil {
+				return err
+			}
+		} else {
+			sb.WriteString(filepath.Join(outDir, fmt.Sprintf("%s.yaml", filepath.Base(path))))
+			log.Printf("writing to %s", sb.String())
+			err := handleOutput(ctx, sb.String(), templatePathAbs, insertionPoint, params, required)
+			if err != nil {
+				return err
+			}
 		}
+
+	}
+	if useOneOf {
+		templateFile := fmt.Sprintf("%s/template.yaml", outDir)
+		return handleOneOf(ctx, templateFile, templatePathAbs, insertionPoint, mods)
+
 	}
 	return nil
 }
 
 func handleOutput(ctx context.Context, outputFile, templatePath, insertionPoint string, properties map[string]models.BackstageParamFields, required []string) error {
+	props := make(map[string]any, len(properties))
+	for k := range properties {
+		props[k] = properties[k]
+	}
 	if templatePath != "" && insertionPoint != "" {
 		input := insertAtInput{
 			templatePath:     templatePath,
 			jqPathExpression: insertionPoint,
-			properties:       properties,
-			required:         required,
+			properties: supportedFields{
+				Properties: props,
+			},
+			required: required,
 		}
 		t, err := insertAt(ctx, input)
 		if err != nil {
@@ -94,7 +122,7 @@ func handleOutput(ctx context.Context, outputFile, templatePath, insertionPoint 
 		return writeOutput(t, outputFile)
 	}
 	t := map[string]any{
-		"properties": properties,
+		"properties": props,
 		"required":   required,
 	}
 	return writeOutput(t, outputFile)

@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"os"
 	"path/filepath"
 	"strings"
@@ -21,11 +22,8 @@ const (
 )
 
 var (
-	inputDir     string
-	outputDir    string
-	templatePath string
-	verifiers    []string
-	namespaced   bool
+	verifiers  []string
+	namespaced bool
 
 	templateName        string
 	templateTitle       string
@@ -68,7 +66,7 @@ func crd(cmd *cobra.Command, args []string) error {
 	return Crd(
 		cmd.OutOrStdout(), cmd.OutOrStderr(),
 		inputDir, outputDir, templatePath,
-		verifiers, namespaced,
+		verifiers, namespaced, useOneOf,
 		templateName, templateTitle, templateDescription,
 	)
 }
@@ -76,17 +74,21 @@ func crd(cmd *cobra.Command, args []string) error {
 func Crd(
 	stdout, stderr io.Writer,
 	inputDir, outputDir, templatePath string,
-	verifiers []string, namespaced bool,
+	verifiers []string, namespaced, useOneOf bool,
 	templateName, templateTitle, templateDescription string,
 ) error {
-	defs, err := getDefs(inputDir, 0)
+	inDir, outDir, err := prepDirectories(inputDir, outputDir, useOneOf)
 	if err != nil {
 		return err
 	}
-
+	defs, err := getDefs(inDir, 0)
+	if err != nil {
+		return err
+	}
+	log.Printf("processing %d definitions", len(defs))
 	output, err := writeSchema(
 		stdout, stderr,
-		outputDir,
+		outDir,
 		defs,
 	)
 	if err != nil {
@@ -96,7 +98,7 @@ func Crd(
 	err = writeToTemplate(
 		stdout, stderr,
 		templatePath,
-		outputDir,
+		outDir,
 		output.Resources, 0,
 		templateName,
 		templateTitle,
@@ -142,30 +144,18 @@ func writeSchema(stdout, stderr io.Writer, outputDir string, defs []string) (cmd
 		Templates: make([]string, 0),
 		Resources: make([]string, 0),
 	}
-
 	templateOutputDir := fmt.Sprintf("%s/%s", outputDir, defDir)
-	_, err := os.Stat(templateOutputDir)
-	if os.IsNotExist(err) {
-		// Directory doesn't exist, so create it
-		err := os.MkdirAll(templateOutputDir, 0755)
-		if err != nil {
-			return cmdOutput{}, err
-		}
-		fmt.Fprintf(stdout, "Directory created successfully!")
-	} else if err != nil {
-		return cmdOutput{}, err
-	}
 
 	for _, def := range defs {
 		data, err := os.ReadFile(def)
 		if err != nil {
-			continue
+			return cmdOutput{}, err
 		}
 
 		var doc models.Definition
 		err = yaml.Unmarshal(data, &doc)
 		if err != nil {
-			fmt.Printf("failed to read %s. This file will be excluded. %s", def, err)
+			log.Printf("failed to read %s. This file will be excluded. %s", def, err)
 			continue
 		}
 
@@ -173,7 +163,7 @@ func writeSchema(stdout, stderr io.Writer, outputDir string, defs []string) (cmd
 			continue
 		}
 
-		fmt.Fprintf(stdout, "foud: %s\n", def)
+		log.Printf("converting %s", def)
 		var resourceName string
 		if doc.Spec.ClaimNames != nil {
 			resourceName = doc.Spec.ClaimNames.Kind
@@ -244,15 +234,15 @@ func writeSchema(stdout, stderr io.Writer, outputDir string, defs []string) (cmd
 
 		wrapperData, err := yaml.Marshal(obj.Object)
 		if err != nil {
-			fmt.Fprintf(stdout, "failed %s: %s \n", def, err.Error())
-			continue
+			log.Printf("failed %s: %s \n", def, err.Error())
+			return cmdOutput{}, err
 		}
 
 		template := fmt.Sprintf("%s/%s.yaml", templateOutputDir, strings.ToLower(resourceName))
-		err = os.WriteFile(template, []byte(wrapperData), 0644)
+		err = os.WriteFile(template, wrapperData, 0644)
 		if err != nil {
-			fmt.Fprintf(stdout, "failed %s: %s \n", def, err.Error())
-			continue
+			log.Printf("failed %s: %s \n", def, err.Error())
+			return cmdOutput{}, err
 		}
 
 		out.Templates = append(out.Templates, template)
@@ -327,7 +317,6 @@ func writeToTemplate(
 		return err
 	}
 
-	fmt.Fprintf(stdout, "Template successfully written.")
 	return nil
 }
 
