@@ -70,7 +70,7 @@ func terraform(ctx context.Context, inputDir, outputDir, templatePath, insertion
 				required = append(required, j)
 			}
 		}
-		filePath := filepath.Join(outputDir, fmt.Sprintf("%s.yaml", filepath.Base(inputDir)))
+		filePath := filepath.Join(outputDir, fmt.Sprintf("%s.yaml", filepath.Base(path)))
 		err := handleOutput(ctx, filePath, templatePath, insertionPoint, params, required)
 		if err != nil {
 			log.Println(err)

@@ -18,9 +18,11 @@ var _ = Describe("Terraform Template", func() {
 	)
 
 	const (
+		validInputRootDir               = "./fakes/terraform/valid"
 		inputDir                        = "./fakes/terraform/valid/input"
 		inputDirWithRequire             = "./fakes/terraform/valid/input-require"
 		expectedPropertyFile            = "./fakes/terraform/valid/output/properties.yaml"
+		expectedPropertyFileWithRequire = "./fakes/terraform/valid/output/properties-require.yaml"
 		expectedTemplateFile            = "./fakes/terraform/valid/output/full-template.yaml"
 		expectedTemplateFileWithRequire = "./fakes/terraform/valid/output/full-template-require.yaml"
 		targetTemplateFile              = "./fakes/template/input-template.yaml"
@@ -91,6 +93,33 @@ var _ = Describe("Terraform Template", func() {
 			expectedData, err := os.ReadFile(expectedTemplateFileWithRequire)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(generatedData).To(MatchYAML(expectedData))
+		})
+	})
+
+	Context("with a root directory specified", func() {
+		BeforeEach(func() {
+			err := terraform(context.Background(), validInputRootDir, outputDir, "", "")
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		It("should create properties files with properties merged and requirements updated", func() {
+			generatedInputData, err := os.ReadFile(fmt.Sprintf("%s/input.yaml", outputDir))
+			Expect(err).NotTo(HaveOccurred())
+			generatedInputRequireData, err := os.ReadFile(fmt.Sprintf("%s/input-require.yaml", outputDir))
+			Expect(err).NotTo(HaveOccurred())
+			expectedInputData, err := os.ReadFile(expectedPropertyFile)
+			Expect(err).NotTo(HaveOccurred())
+			expectedInputRequireData, err := os.ReadFile(expectedPropertyFileWithRequire)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(generatedInputData).To(MatchYAML(expectedInputData))
+			Expect(generatedInputRequireData).To(MatchYAML(expectedInputRequireData))
+		})
+	})
+
+	Context("with an invalid input and no target template specified", func() {
+		It("should return an error", func() {
+			err := terraform(context.Background(), "./fakes/terraform/invalid", outputDir, "", "")
+			Expect(err).Should(HaveOccurred())
 		})
 	})
 })
