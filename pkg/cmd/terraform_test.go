@@ -45,7 +45,7 @@ var _ = Describe("Terraform Template", func() {
 
 	Context("with valid input and no target template specified", func() {
 		BeforeEach(func() {
-			err := terraform(context.Background(), inputDir, outputDir, "", "")
+			err := terraform(context.Background(), inputDir, outputDir, "", "", false)
 			Expect(err).NotTo(HaveOccurred())
 		})
 
@@ -60,7 +60,7 @@ var _ = Describe("Terraform Template", func() {
 	})
 	Context("with valid input and a target template specified", func() {
 		BeforeEach(func() {
-			err := terraform(context.Background(), inputDir, outputDir, targetTemplateFile, ".spec.parameters[0]")
+			err := terraform(context.Background(), inputDir, outputDir, targetTemplateFile, ".spec.parameters[0]", false)
 			Expect(err).NotTo(HaveOccurred())
 		})
 
@@ -83,7 +83,7 @@ var _ = Describe("Terraform Template", func() {
 	})
 	Context("with valid input with required variable and a target template specified", func() {
 		BeforeEach(func() {
-			err := terraform(context.Background(), inputDirWithRequire, outputDir, targetTemplateFile, ".spec.parameters[0]")
+			err := terraform(context.Background(), inputDirWithRequire, outputDir, targetTemplateFile, ".spec.parameters[0]", false)
 			Expect(err).NotTo(HaveOccurred())
 		})
 
@@ -98,7 +98,7 @@ var _ = Describe("Terraform Template", func() {
 
 	Context("with a root directory specified", func() {
 		BeforeEach(func() {
-			err := terraform(context.Background(), validInputRootDir, outputDir, "", "")
+			err := terraform(context.Background(), validInputRootDir, outputDir, "", "", false)
 			Expect(err).NotTo(HaveOccurred())
 		})
 
@@ -118,8 +118,34 @@ var _ = Describe("Terraform Template", func() {
 
 	Context("with an invalid input and no target template specified", func() {
 		It("should return an error", func() {
-			err := terraform(context.Background(), "./fakes/terraform/invalid", outputDir, "", "")
+			err := terraform(context.Background(), "./fakes/terraform/invalid", outputDir, "", "", false)
 			Expect(err).Should(HaveOccurred())
+		})
+	})
+
+	Context("with a root directory and oneOf flag specified", func() {
+		BeforeEach(func() {
+			err := terraform(context.Background(), validInputRootDir, outputDir, targetTemplateFile, ".spec.parameters[0]", true)
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		It("should create properties files with properties merged and requirements updated", func() {
+			generatedInputData, err := os.ReadFile(fmt.Sprintf("%s/resources/input.yaml", outputDir))
+			Expect(err).NotTo(HaveOccurred())
+			generatedInputRequireData, err := os.ReadFile(fmt.Sprintf("%s/resources/input-require.yaml", outputDir))
+			Expect(err).NotTo(HaveOccurred())
+			expectedInputData, err := os.ReadFile(expectedPropertyFile)
+			Expect(err).NotTo(HaveOccurred())
+			expectedInputRequireData, err := os.ReadFile(expectedPropertyFileWithRequire)
+			Expect(err).NotTo(HaveOccurred())
+
+			expectedTempalteData, err := os.ReadFile("./fakes/terraform/valid/output/full-template-oneof.yaml")
+			generatedTemplateData, err := os.ReadFile(fmt.Sprintf("%s/template.yaml", outputDir))
+
+			Expect(generatedInputData).To(MatchYAML(expectedInputData))
+			Expect(generatedInputRequireData).To(MatchYAML(expectedInputRequireData))
+			Expect(generatedTemplateData).To(MatchYAML(expectedTempalteData))
+
 		})
 	})
 })

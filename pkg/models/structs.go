@@ -23,6 +23,7 @@ type Spec struct {
 			} `yaml:"openAPIV3Schema"`
 		} `json:"schema"`
 	} `json:"versions"`
+	Scope string
 }
 
 type Definition struct {

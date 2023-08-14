@@ -1,0 +1,37 @@
+apiVersion: scaffolder.backstage.io/v1beta3
+kind: Template
+metadata:
+  name: deploy-resources
+  title: Deploy Resources
+  description: Deploy Resource to Kubernetes
+spec:
+  owner: guest
+  type: service
+  parameters:
+    - title: Choose Resource
+      description: Select a AWS resource to add to your repository.
+      properties:
+        resources:
+          type: string
+          enum:
+            - input
+            - input-require
+        name:
+          description: name of this resource. This will be the name of K8s object.
+          type: string
+        path:
+          default: kustomize/base
+          description: path to place this file into
+          type: string
+      dependencies:
+        resources:
+          oneOf:
+            - $yaml: resources/input.yaml
+            - $yaml: resources/input-require.yaml
+      required:
+        - awsResources
+        - name
+  steps:
+    - id: verify
+      name: verify
+      action: cnoe:verify:dependency

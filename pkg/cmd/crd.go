@@ -1,9 +1,10 @@
 package cmd
 
 import (
+	"context"
 	"errors"
 	"fmt"
-	"io"
+	"log"
 	"os"
 	"path/filepath"
 	"strings"
@@ -21,11 +22,7 @@ const (
 )
 
 var (
-	inputDir     string
-	outputDir    string
-	templatePath string
-	verifiers    []string
-	namespaced   bool
+	verifiers []string
 
 	templateName        string
 	templateTitle       string
@@ -35,27 +32,19 @@ var (
 func init() {
 	templateCmd.AddCommand(crdCmd)
 	crdCmd.Flags().StringArrayVarP(&verifiers, "verifier", "v", []string{}, "list of verifiers to test the resource against")
-	crdCmd.Flags().BoolVarP(&namespaced, "namespaced", "n", false, "whether or not resources are namespaced")
 
 	crdCmd.Flags().StringVarP(&templateName, "templateName", "", "", "sets the name of the template")
 	crdCmd.Flags().StringVarP(&templateTitle, "templateTitle", "", "", "sets the title of the template")
 	crdCmd.Flags().StringVarP(&templateDescription, "templateDescription", "", "", "sets the description of the template")
-
-	crdCmd.MarkFlagRequired("templatePath")
 }
 
 var (
 	crdCmd = &cobra.Command{
-		Use:   "crd",
-		Short: "Generate backstage templates from CRD/XRD",
-		Long:  `Generate backstage templates from supplied CRD and XRD definitions`,
-		PreRunE: func(cmd *cobra.Command, args []string) error {
-			if !isDirectory(inputDir) || !isDirectory(outputDir) {
-				return errors.New("inputDir and ouputDir entries need to be directories")
-			}
-			return nil
-		},
-		RunE: crd,
+		Use:     "crd",
+		Short:   "Generate backstage templates from CRD/XRD",
+		Long:    `Generate backstage templates from supplied CRD and XRD definitions`,
+		PreRunE: templatePreRunE,
+		RunE:    crd,
 	}
 )
 
@@ -66,43 +55,51 @@ type cmdOutput struct {
 
 func crd(cmd *cobra.Command, args []string) error {
 	return Crd(
-		cmd.OutOrStdout(), cmd.OutOrStderr(),
-		inputDir, outputDir, templatePath,
-		verifiers, namespaced,
+		cmd.Context(),
+		inputDir, outputDir, templatePath, insertionPoint,
+		verifiers, useOneOf,
 		templateName, templateTitle, templateDescription,
 	)
 }
 
 func Crd(
-	stdout, stderr io.Writer,
-	inputDir, outputDir, templatePath string,
-	verifiers []string, namespaced bool,
+	ctx context.Context, inputDir, outputDir, templatePath, insertionPoint string,
+	verifiers []string, useOneOf bool,
 	templateName, templateTitle, templateDescription string,
 ) error {
-	defs, err := getDefs(inputDir, 0)
+	inDir, outDir, template, err := prepDirectories(inputDir, outputDir, templatePath, useOneOf)
 	if err != nil {
 		return err
 	}
+	defs, err := getDefs(inDir, 0)
+	if err != nil {
+		return err
+	}
+	log.Printf("processing %d definitions", len(defs))
 
-	output, err := writeSchema(
-		stdout, stderr,
-		outputDir,
+	schemaDir := outDir
+	if useOneOf {
+		schemaDir = filepath.Join(outDir, defDir)
+		output, err := writeSchema(
+			ctx,
+			schemaDir,
+			"",
+			"",
+			defs,
+		)
+		if err != nil {
+			return err
+		}
+		templateFile := filepath.Join(outDir, "template.yaml")
+		return writeOneOf(ctx, templateFile, template, insertionPoint, output.Templates)
+	}
+	_, err = writeSchema(
+		ctx,
+		schemaDir,
+		insertionPoint,
+		template,
 		defs,
 	)
-	if err != nil {
-		return err
-	}
-
-	err = writeToTemplate(
-		stdout, stderr,
-		templatePath,
-		outputDir,
-		output.Resources, 0,
-		templateName,
-		templateTitle,
-		templateDescription,
-	)
-
 	if err != nil {
 		return err
 	}
@@ -137,125 +134,46 @@ func findDefs(file os.DirEntry, currentDepth uint32, base string) ([]string, err
 	return []string{f}, nil
 }
 
-func writeSchema(stdout, stderr io.Writer, outputDir string, defs []string) (cmdOutput, error) {
+func writeSchema(ctx context.Context, outputDir, insertionPoint, templateFile string, defs []string) (cmdOutput, error) {
 	out := cmdOutput{
 		Templates: make([]string, 0),
 		Resources: make([]string, 0),
 	}
 
-	templateOutputDir := fmt.Sprintf("%s/%s", outputDir, defDir)
-	_, err := os.Stat(templateOutputDir)
-	if os.IsNotExist(err) {
-		// Directory doesn't exist, so create it
-		err := os.MkdirAll(templateOutputDir, 0755)
+	for _, def := range defs {
+		converted, resourceName, err := convert(def)
 		if err != nil {
+			var e NotSupported
+			if errors.As(err, &e) {
+				continue
+			}
 			return cmdOutput{}, err
 		}
-		fmt.Fprintf(stdout, "Directory created successfully!")
-	} else if err != nil {
-		return cmdOutput{}, err
-	}
-
-	for _, def := range defs {
-		data, err := os.ReadFile(def)
-		if err != nil {
-			continue
-		}
-
-		var doc models.Definition
-		err = yaml.Unmarshal(data, &doc)
-		if err != nil {
-			fmt.Printf("failed to read %s. This file will be excluded. %s", def, err)
-			continue
-		}
-
-		if !isXRD(doc) && !isCRD(doc) {
-			continue
-		}
-
-		fmt.Fprintf(stdout, "foud: %s\n", def)
-		var resourceName string
-		if doc.Spec.ClaimNames != nil {
-			resourceName = doc.Spec.ClaimNames.Kind
-		} else {
-			resourceName = fmt.Sprintf("%s.%s", doc.Spec.Group, doc.Spec.Names.Kind)
-		}
-
-		var value map[string]interface{}
-
-		v := doc.Spec.Versions[0].Schema.OpenAPIV3Schema.Properties["spec"]
-		if v == nil {
-			value = doc.Spec.Versions[0].Schema.OpenAPIV3Schema.Properties
-		} else {
-			value, err = ConvertMap(v)
+		filename := filepath.Join(outputDir, fmt.Sprintf("%s.yaml", strings.ToLower(resourceName)))
+		if templateFile != "" && insertionPoint != "" {
+			input := insertAtInput{
+				templatePath:     templateFile,
+				jqPathExpression: insertionPoint,
+			}
+			props := converted.(map[string]any)
+			if v, reqOk := props["required"]; reqOk {
+				if reqs, ok := v.([]string); ok {
+					input.required = reqs
+				}
+			}
+			input.fields = props
+			t, err := insertAt(ctx, input)
 			if err != nil {
 				return cmdOutput{}, err
 			}
+			converted = t
 		}
-
-		obj := &unstructured.Unstructured{
-			Object: make(map[string]interface{}, 0),
-		}
-		unstructured.SetNestedSlice(obj.Object, ConvertSlice([]string{resourceName}), "properties", "resources", "enum")
-		unstructured.SetNestedMap(obj.Object, value, "properties", "config")
-		unstructured.SetNestedField(obj.Object, fmt.Sprintf("%s configuration options", resourceName), "properties", "config", "title")
-
-		// setting GVK for the resource
-		if len(doc.Spec.Versions) > 0 {
-			unstructured.SetNestedMap(obj.Object, map[string]interface{}{
-				"type":        "string",
-				"description": "APIVersion for the resource",
-				"default":     fmt.Sprintf("%s/%s", doc.Spec.Group, doc.Spec.Versions[0].Name),
-			},
-				"properties", "apiVersion")
-			unstructured.SetNestedMap(obj.Object, map[string]interface{}{
-				"type":        "string",
-				"description": "Kind for the resource",
-				"default":     doc.Spec.Names.Kind,
-			},
-				"properties", "kind")
-		}
-
-		// add a property to define the namespace for the resource
-		if namespaced {
-			unstructured.SetNestedMap(obj.Object, map[string]interface{}{
-				"type":        "string",
-				"description": "Namespace for the resource",
-				"namespace":   "default",
-			},
-				"properties", "namespace")
-		}
-
-		// add verifiers to the resource
-		if len(verifiers) > 0 {
-			var convertedVerifiers []interface{} = make([]interface{}, len(verifiers))
-			for i, v := range verifiers {
-				convertedVerifiers[i] = v
-			}
-
-			unstructured.SetNestedMap(obj.Object, map[string]interface{}{
-				"type":        "array",
-				"description": "verifiers to be used against the resource",
-				"items":       map[string]interface{}{"type": "string"},
-				"default":     convertedVerifiers,
-			},
-				"properties", "verifiers")
-		}
-
-		wrapperData, err := yaml.Marshal(obj.Object)
+		err = writeOutput(converted, filename)
 		if err != nil {
-			fmt.Fprintf(stdout, "failed %s: %s \n", def, err.Error())
-			continue
+			log.Printf("failed to write %s: %s \n", def, err.Error())
+			return cmdOutput{}, err
 		}
-
-		template := fmt.Sprintf("%s/%s.yaml", templateOutputDir, strings.ToLower(resourceName))
-		err = os.WriteFile(template, []byte(wrapperData), 0644)
-		if err != nil {
-			fmt.Fprintf(stdout, "failed %s: %s \n", def, err.Error())
-			continue
-		}
-
-		out.Templates = append(out.Templates, template)
+		out.Templates = append(out.Templates, filename)
 		out.Resources = append(out.Resources, resourceName)
 	}
 
@@ -263,7 +181,6 @@ func writeSchema(stdout, stderr io.Writer, outputDir string, defs []string) (cmd
 }
 
 func writeToTemplate(
-	stdout, stderr io.Writer,
 	templateFile string, outputPath string, identifiedResources []string, position int,
 	templateName, templateTitle, templateDescription string,
 ) error {
@@ -296,14 +213,6 @@ func writeToTemplate(
 		} `yaml:"resources,omitempty"`
 	}{}
 
-	resources := struct {
-		Type string   `yaml:"type"`
-		Enum []string `yaml:"enum"`
-	}{
-		Type: "string",
-		Enum: identifiedResources,
-	}
-
 	for _, r := range identifiedResources {
 		dependencies.Resources.OneOf = append(dependencies.Resources.OneOf, map[string]interface{}{
 			"$yaml": fmt.Sprintf("resources/%s.yaml", strings.ToLower(r)),
@@ -314,7 +223,6 @@ func writeToTemplate(
 		return errors.New("not the right template or input format")
 	}
 
-	doc.Spec.Parameters[position].Properties["resources"] = resources
 	doc.Spec.Parameters[position].Dependencies = dependencies
 
 	outputData, err := yaml.Marshal(&doc)
@@ -327,8 +235,95 @@ func writeToTemplate(
 		return err
 	}
 
-	fmt.Fprintf(stdout, "Template successfully written.")
 	return nil
+}
+
+func convert(def string) (any, string, error) {
+	data, err := os.ReadFile(def)
+	if err != nil {
+		return nil, "", err
+	}
+	var doc models.Definition
+	err = yaml.Unmarshal(data, &doc)
+	if err != nil {
+		log.Printf("failed to read %s. This file will be excluded. %s", def, err)
+		return nil, "", NotSupported{
+			fmt.Errorf("%s is not a kubernetes file", def),
+		}
+	}
+
+	if !isXRD(doc) && !isCRD(doc) {
+		return nil, "", NotSupported{
+			fmt.Errorf("%s is not a CRD or XRD", def),
+		}
+	}
+	var resourceName string
+	if doc.Spec.ClaimNames != nil {
+		resourceName = doc.Spec.ClaimNames.Kind
+	} else {
+		resourceName = fmt.Sprintf("%s.%s", doc.Spec.Group, doc.Spec.Names.Kind)
+	}
+
+	var value map[string]interface{}
+
+	v := doc.Spec.Versions[0].Schema.OpenAPIV3Schema.Properties["spec"]
+	if v == nil {
+		value = doc.Spec.Versions[0].Schema.OpenAPIV3Schema.Properties
+	} else {
+		value, err = ConvertMap(v)
+		if err != nil {
+			return cmdOutput{}, "", err
+		}
+	}
+
+	obj := &unstructured.Unstructured{
+		Object: make(map[string]interface{}, 0),
+	}
+	unstructured.SetNestedMap(obj.Object, value, "properties", "config")
+	unstructured.SetNestedField(obj.Object, fmt.Sprintf("%s configuration options", resourceName), "properties", "config", "title")
+
+	// setting GVK for the resource
+	if len(doc.Spec.Versions) > 0 {
+		unstructured.SetNestedMap(obj.Object, map[string]interface{}{
+			"type":        "string",
+			"description": "APIVersion for the resource",
+			"default":     fmt.Sprintf("%s/%s", doc.Spec.Group, doc.Spec.Versions[0].Name),
+		},
+			"properties", "apiVersion")
+		unstructured.SetNestedMap(obj.Object, map[string]interface{}{
+			"type":        "string",
+			"description": "Kind for the resource",
+			"default":     doc.Spec.Names.Kind,
+		},
+			"properties", "kind")
+	}
+
+	// add a property to define the namespace for the resource
+	if doc.Spec.Scope == "Namespaced" {
+		unstructured.SetNestedMap(obj.Object, map[string]interface{}{
+			"type":        "string",
+			"description": "Namespace for the resource",
+			"namespace":   "default",
+		},
+			"properties", "namespace")
+	}
+
+	// add verifiers to the resource
+	if len(verifiers) > 0 {
+		var convertedVerifiers []interface{} = make([]interface{}, len(verifiers))
+		for i, v := range verifiers {
+			convertedVerifiers[i] = v
+		}
+
+		unstructured.SetNestedMap(obj.Object, map[string]interface{}{
+			"type":        "array",
+			"description": "verifiers to be used against the resource",
+			"items":       map[string]interface{}{"type": "string"},
+			"default":     convertedVerifiers,
+		},
+			"properties", "verifiers")
+	}
+	return obj.Object, resourceName, nil
 }
 
 func ConvertSlice(strSlice []string) []interface{} {

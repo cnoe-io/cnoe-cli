@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"log"
 	"os"
@@ -23,16 +22,9 @@ var (
 			"If the templatePath and insertionPoint flags are set, generated objects are merged into the given template at given insertion point.\n" +
 			"Otherwise a yaml file with two keys are generated. The properties key contains the generated form input. " +
 			"The required key contains the TF variable names that do not have defaults.",
-		PreRunE: func(cmd *cobra.Command, args []string) error {
-			if !isDirectory(inputDir) {
-				return errors.New("inputDir and ouputDir entries need to be directories")
-			}
-			return nil
-		},
-		RunE: tfE,
+		PreRunE: templatePreRunE,
+		RunE:    tfE,
 	}
-	depth          uint32
-	insertionPoint string
 )
 
 func init() {
@@ -40,52 +32,81 @@ func init() {
 }
 
 func tfE(cmd *cobra.Command, args []string) error {
-	return terraform(cmd.Context(), inputDir, outputDir, templatePath, insertionPoint)
+	return terraform(cmd.Context(), inputDir, outputDir, templatePath, insertionPoint, useOneOf)
 }
 
-func terraform(ctx context.Context, inputDir, outputDir, templatePath, insertionPoint string) error {
-	mods, err := getModules(inputDir, 0)
+func terraform(ctx context.Context, inputDir, outputDir, templatePath, insertionPoint string, useOneOf bool) error {
+	inDir, outDir, template, err := prepDirectories(inputDir, outputDir, templatePath, useOneOf)
+	mods, err := getModules(inDir, 0)
 	if err != nil {
 		return err
 	}
 	if len(mods) == 0 {
-		return fmt.Errorf("could not find any TF modules in given directorr: %s", inputDir)
+		return fmt.Errorf("could not find any TF modules in given directorr: %s", inDir)
 	}
-
+	log.Printf("processing %d modules", len(mods))
 	for i := range mods {
 		path := mods[i]
+		log.Printf("processing module at %s", path)
 		mod, diag := tfconfig.LoadModule(path)
 		if diag.HasErrors() {
 			return diag.Err()
 		}
 		if len(mod.Variables) == 0 {
-			fmt.Println(fmt.Sprintf("module %s does not have variables", path))
+			log.Printf(fmt.Sprintf("module %s does not have variables", path))
 			continue
 		}
 		params := make(map[string]models.BackstageParamFields)
 		required := make([]string, 0)
+		log.Printf("converting %d variables", len(mod.Variables))
 		for j := range mod.Variables {
 			params[j] = convertVariable(*mod.Variables[j])
 			if mod.Variables[j].Required {
 				required = append(required, j)
 			}
 		}
-		filePath := filepath.Join(outputDir, fmt.Sprintf("%s.yaml", filepath.Base(path)))
-		err := handleOutput(ctx, filePath, templatePath, insertionPoint, params, required)
-		if err != nil {
-			log.Println(err)
+		if useOneOf {
+			p := filepath.Join(outDir, defDir, fmt.Sprintf("%s.yaml", filepath.Base(path)))
+			log.Printf("writing to %s", p)
+			err := handleOutput(ctx, p, "", "", params, required)
+			if err != nil {
+				return err
+			}
+		} else {
+			p := filepath.Join(outDir, fmt.Sprintf("%s.yaml", filepath.Base(path)))
+			log.Printf("writing to %s", p)
+			err := handleOutput(ctx, p, template, insertionPoint, params, required)
+			if err != nil {
+				return err
+			}
 		}
+	}
+	if useOneOf {
+		templateFile := filepath.Join(outDir, "template.yaml")
+		resourceFileNames := make([]string, len(mods))
+		for i := range mods {
+			resourceFileNames[i] = fmt.Sprintf("%s.yaml", mods[i])
+		}
+		return writeOneOf(ctx, templateFile, template, insertionPoint, resourceFileNames)
 	}
 	return nil
 }
 
-func handleOutput(ctx context.Context, outputFile, templatePath, insertionPoint string, properties map[string]models.BackstageParamFields, required []string) error {
-	if templatePath != "" && insertionPoint != "" {
+func handleOutput(ctx context.Context, outputFile, templateFile, insertionPoint string, properties map[string]models.BackstageParamFields, required []string) error {
+	props := make(map[string]any, len(properties))
+	for k := range properties {
+		props[k] = properties[k]
+	}
+	if templateFile != "" && insertionPoint != "" {
 		input := insertAtInput{
-			templatePath:     templatePath,
+			templatePath:     templateFile,
 			jqPathExpression: insertionPoint,
-			properties:       properties,
-			required:         required,
+			fields: map[string]any{
+				"properties": props,
+			},
+		}
+		if len(required) > 0 {
+			input.required = required
 		}
 		t, err := insertAt(ctx, input)
 		if err != nil {
@@ -94,7 +115,7 @@ func handleOutput(ctx context.Context, outputFile, templatePath, insertionPoint 
 		return writeOutput(t, outputFile)
 	}
 	t := map[string]any{
-		"properties": properties,
+		"properties": props,
 		"required":   required,
 	}
 	return writeOutput(t, outputFile)

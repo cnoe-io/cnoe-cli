@@ -1,0 +1,37 @@
+apiVersion: scaffolder.backstage.io/v1beta3
+kind: Template
+metadata:
+  description: Deploy Resource to Kubernetes
+  name: deploy-resources
+  title: Deploy Resources
+spec:
+  owner: guest
+  parameters:
+    - dependencies:
+        resources:
+          oneOf:
+            - $yaml: resources/awsblueprints.io.xcdn.yaml
+            - $yaml: resources/sparkoperator.k8s.io.sparkapplication.yaml
+      description: Select a AWS resource to add to your repository.
+      properties:
+        name:
+          description: name of this resource. This will be the name of K8s object.
+          type: string
+        path:
+          default: kustomize/base
+          description: path to place this file into
+          type: string
+        resources:
+          enum:
+            - awsblueprints.io.xcdn
+            - sparkoperator.k8s.io.sparkapplication
+          type: string
+      required:
+        - awsResources
+        - name
+      title: Choose Resource
+  steps:
+    - action: cnoe:verify:dependency
+      id: verify
+      name: verify
+  type: service
