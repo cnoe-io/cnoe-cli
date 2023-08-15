@@ -42,11 +42,7 @@ func tfE(cmd *cobra.Command, args []string) error {
 }
 
 func terraform(ctx context.Context, inputDir, outputDir, templatePath, insertionPoint string, useOneOf bool) error {
-	inDir, outDir, err := prepDirectories(inputDir, outputDir, useOneOf)
-	templatePathAbs, err := filepath.Abs(templatePath)
-	if err != nil {
-		return err
-	}
+	inDir, outDir, template, err := prepDirectories(inputDir, outputDir, templatePath, useOneOf)
 	mods, err := getModules(inDir, 0)
 	if err != nil {
 		return err
@@ -75,18 +71,17 @@ func terraform(ctx context.Context, inputDir, outputDir, templatePath, insertion
 				required = append(required, j)
 			}
 		}
-		var sb strings.Builder
 		if useOneOf {
-			sb.WriteString(filepath.Join(outDir, "resources", fmt.Sprintf("%s.yaml", filepath.Base(path))))
-			log.Printf("writing to %s", sb.String())
-			err := handleOutput(ctx, sb.String(), "", "", params, required)
+			p := filepath.Join(outDir, "resources", fmt.Sprintf("%s.yaml", filepath.Base(path)))
+			log.Printf("writing to %s", p)
+			err := handleOutput(ctx, p, "", "", params, required)
 			if err != nil {
 				return err
 			}
 		} else {
-			sb.WriteString(filepath.Join(outDir, fmt.Sprintf("%s.yaml", filepath.Base(path))))
-			log.Printf("writing to %s", sb.String())
-			err := handleOutput(ctx, sb.String(), templatePathAbs, insertionPoint, params, required)
+			p := filepath.Join(outDir, fmt.Sprintf("%s.yaml", filepath.Base(path)))
+			log.Printf("writing to %s", p)
+			err := handleOutput(ctx, p, template, insertionPoint, params, required)
 			if err != nil {
 				return err
 			}
@@ -95,7 +90,7 @@ func terraform(ctx context.Context, inputDir, outputDir, templatePath, insertion
 	}
 	if useOneOf {
 		templateFile := fmt.Sprintf("%s/template.yaml", outDir)
-		return handleOneOf(ctx, templateFile, templatePathAbs, insertionPoint, mods)
+		return handleOneOf(ctx, templateFile, template, insertionPoint, mods)
 
 	}
 	return nil
@@ -110,7 +105,7 @@ func handleOutput(ctx context.Context, outputFile, templatePath, insertionPoint 
 		input := insertAtInput{
 			templatePath:     templatePath,
 			jqPathExpression: insertionPoint,
-			properties: supportedFields{
+			fields: supportedFields{
 				Properties: props,
 			},
 			required: required,

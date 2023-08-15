@@ -14,18 +14,18 @@ import (
 
 type finder func(file os.DirEntry, currentDepth uint32, base string) ([]string, error)
 
-type NotFoundError struct {
+type NotSupported struct {
 	Err error
 }
 
-func (n NotFoundError) Error() string {
+func (n NotSupported) Error() string {
 	return n.Error()
 }
 
 type insertAtInput struct {
 	templatePath     string
 	jqPathExpression string
-	properties       supportedFields
+	fields           supportedFields
 	required         []string
 }
 
@@ -53,15 +53,19 @@ func checkAndCreateDir(path string) error {
 	return nil
 }
 
-// return absolute path for given input and output dirs, if output path does not exist, create it.
-func prepDirectories(inputDir, outputDir string, oneOf bool) (string, string, error) {
+// return absolute path for given input, output, and template files, if output path does not exist, create it.
+func prepDirectories(inputDir, outputDir, templateFile string, oneOf bool) (string, string, string, error) {
 	input, err := filepath.Abs(inputDir)
 	if err != nil {
-		return "", "", err
+		return "", "", "", err
 	}
 	output, err := filepath.Abs(outputDir)
 	if err != nil {
-		return "", "", err
+		return "", "", "", err
+	}
+	t, err := filepath.Abs(templateFile)
+	if err != nil {
+		return "", "", "", err
 	}
 	m := output
 	if oneOf {
@@ -69,9 +73,10 @@ func prepDirectories(inputDir, outputDir string, oneOf bool) (string, string, er
 	}
 	err = checkAndCreateDir(m)
 	if err != nil {
-		return "", "", err
+		return "", "", "", err
 	}
-	return input, output, nil
+
+	return input, output, t, nil
 }
 
 func handleOneOf(ctx context.Context, outputFile, templatePath, insertionPoint string, resourceFiles []string) error {
@@ -112,8 +117,8 @@ func oneOf(ctx context.Context, resourceFiles []string, input insertAtInput) (an
 			"oneOf": m,
 		},
 	}
-	input.properties.Properties = props
-	input.properties.Dependencies = deps
+	input.fields.Properties = props
+	input.fields.Dependencies = deps
 
 	return insertAt(ctx, input)
 }
@@ -137,7 +142,7 @@ func insertAt(ctx context.Context, input insertAtInput) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	jqProp, err := jsonFromObject(input.properties)
+	jqProp, err := jsonFromObject(input.fields)
 	if err != nil {
 		return nil, err
 	}

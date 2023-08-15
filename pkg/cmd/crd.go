@@ -3,7 +3,6 @@ package cmd
 import (
 	"errors"
 	"fmt"
-	"io"
 	"log"
 	"os"
 	"path/filepath"
@@ -22,8 +21,7 @@ const (
 )
 
 var (
-	verifiers  []string
-	namespaced bool
+	verifiers []string
 
 	templateName        string
 	templateTitle       string
@@ -33,7 +31,6 @@ var (
 func init() {
 	templateCmd.AddCommand(crdCmd)
 	crdCmd.Flags().StringArrayVarP(&verifiers, "verifier", "v", []string{}, "list of verifiers to test the resource against")
-	crdCmd.Flags().BoolVarP(&namespaced, "namespaced", "n", false, "whether or not resources are namespaced")
 
 	crdCmd.Flags().StringVarP(&templateName, "templateName", "", "", "sets the name of the template")
 	crdCmd.Flags().StringVarP(&templateTitle, "templateTitle", "", "", "sets the title of the template")
@@ -64,7 +61,6 @@ type cmdOutput struct {
 
 func crd(cmd *cobra.Command, args []string) error {
 	return Crd(
-		cmd.OutOrStdout(), cmd.OutOrStderr(),
 		inputDir, outputDir, templatePath,
 		verifiers, namespaced, useOneOf,
 		templateName, templateTitle, templateDescription,
@@ -72,12 +68,11 @@ func crd(cmd *cobra.Command, args []string) error {
 }
 
 func Crd(
-	stdout, stderr io.Writer,
 	inputDir, outputDir, templatePath string,
 	verifiers []string, namespaced, useOneOf bool,
 	templateName, templateTitle, templateDescription string,
 ) error {
-	inDir, outDir, err := prepDirectories(inputDir, outputDir, useOneOf)
+	inDir, outDir, template, err := prepDirectories(inputDir, outputDir, templatePath, useOneOf)
 	if err != nil {
 		return err
 	}
@@ -87,7 +82,6 @@ func Crd(
 	}
 	log.Printf("processing %d definitions", len(defs))
 	output, err := writeSchema(
-		stdout, stderr,
 		outDir,
 		defs,
 	)
@@ -96,8 +90,7 @@ func Crd(
 	}
 
 	err = writeToTemplate(
-		stdout, stderr,
-		templatePath,
+		template,
 		outDir,
 		output.Resources, 0,
 		templateName,
@@ -139,7 +132,7 @@ func findDefs(file os.DirEntry, currentDepth uint32, base string) ([]string, err
 	return []string{f}, nil
 }
 
-func writeSchema(stdout, stderr io.Writer, outputDir string, defs []string) (cmdOutput, error) {
+func writeSchema(outputDir string, defs []string) (cmdOutput, error) {
 	out := cmdOutput{
 		Templates: make([]string, 0),
 		Resources: make([]string, 0),
@@ -147,92 +140,14 @@ func writeSchema(stdout, stderr io.Writer, outputDir string, defs []string) (cmd
 	templateOutputDir := fmt.Sprintf("%s/%s", outputDir, defDir)
 
 	for _, def := range defs {
-		data, err := os.ReadFile(def)
+		converted, err := convert(def)
 		if err != nil {
-			return cmdOutput{}, err
-		}
-
-		var doc models.Definition
-		err = yaml.Unmarshal(data, &doc)
-		if err != nil {
-			log.Printf("failed to read %s. This file will be excluded. %s", def, err)
-			continue
-		}
-
-		if !isXRD(doc) && !isCRD(doc) {
-			continue
-		}
-
-		log.Printf("converting %s", def)
-		var resourceName string
-		if doc.Spec.ClaimNames != nil {
-			resourceName = doc.Spec.ClaimNames.Kind
-		} else {
-			resourceName = fmt.Sprintf("%s.%s", doc.Spec.Group, doc.Spec.Names.Kind)
-		}
-
-		var value map[string]interface{}
-
-		v := doc.Spec.Versions[0].Schema.OpenAPIV3Schema.Properties["spec"]
-		if v == nil {
-			value = doc.Spec.Versions[0].Schema.OpenAPIV3Schema.Properties
-		} else {
-			value, err = ConvertMap(v)
-			if err != nil {
+			var e NotSupported
+			if !errors.As(err, &e) {
 				return cmdOutput{}, err
 			}
 		}
-
-		obj := &unstructured.Unstructured{
-			Object: make(map[string]interface{}, 0),
-		}
-		unstructured.SetNestedSlice(obj.Object, ConvertSlice([]string{resourceName}), "properties", "resources", "enum")
-		unstructured.SetNestedMap(obj.Object, value, "properties", "config")
-		unstructured.SetNestedField(obj.Object, fmt.Sprintf("%s configuration options", resourceName), "properties", "config", "title")
-
-		// setting GVK for the resource
-		if len(doc.Spec.Versions) > 0 {
-			unstructured.SetNestedMap(obj.Object, map[string]interface{}{
-				"type":        "string",
-				"description": "APIVersion for the resource",
-				"default":     fmt.Sprintf("%s/%s", doc.Spec.Group, doc.Spec.Versions[0].Name),
-			},
-				"properties", "apiVersion")
-			unstructured.SetNestedMap(obj.Object, map[string]interface{}{
-				"type":        "string",
-				"description": "Kind for the resource",
-				"default":     doc.Spec.Names.Kind,
-			},
-				"properties", "kind")
-		}
-
-		// add a property to define the namespace for the resource
-		if namespaced {
-			unstructured.SetNestedMap(obj.Object, map[string]interface{}{
-				"type":        "string",
-				"description": "Namespace for the resource",
-				"namespace":   "default",
-			},
-				"properties", "namespace")
-		}
-
-		// add verifiers to the resource
-		if len(verifiers) > 0 {
-			var convertedVerifiers []interface{} = make([]interface{}, len(verifiers))
-			for i, v := range verifiers {
-				convertedVerifiers[i] = v
-			}
-
-			unstructured.SetNestedMap(obj.Object, map[string]interface{}{
-				"type":        "array",
-				"description": "verifiers to be used against the resource",
-				"items":       map[string]interface{}{"type": "string"},
-				"default":     convertedVerifiers,
-			},
-				"properties", "verifiers")
-		}
-
-		wrapperData, err := yaml.Marshal(obj.Object)
+		wrapperData, err := yaml.Marshal(converted)
 		if err != nil {
 			log.Printf("failed %s: %s \n", def, err.Error())
 			return cmdOutput{}, err
@@ -253,7 +168,6 @@ func writeSchema(stdout, stderr io.Writer, outputDir string, defs []string) (cmd
 }
 
 func writeToTemplate(
-	stdout, stderr io.Writer,
 	templateFile string, outputPath string, identifiedResources []string, position int,
 	templateName, templateTitle, templateDescription string,
 ) error {
@@ -318,6 +232,95 @@ func writeToTemplate(
 	}
 
 	return nil
+}
+
+func convert(def string) (any, error) {
+	data, err := os.ReadFile(def)
+	if err != nil {
+		return nil, err
+	}
+	var doc models.Definition
+	err = yaml.Unmarshal(data, &doc)
+	if err != nil {
+		log.Printf("failed to read %s. This file will be excluded. %s", def, err)
+		return nil, NotSupported{
+			fmt.Errorf("%s is not a kubernetes file", def),
+		}
+	}
+
+	if !isXRD(doc) && !isCRD(doc) {
+		return nil, NotSupported{
+			fmt.Errorf("%s is not a CRD or XRD", def),
+		}
+	}
+	var resourceName string
+	if doc.Spec.ClaimNames != nil {
+		resourceName = doc.Spec.ClaimNames.Kind
+	} else {
+		resourceName = fmt.Sprintf("%s.%s", doc.Spec.Group, doc.Spec.Names.Kind)
+	}
+
+	var value map[string]interface{}
+
+	v := doc.Spec.Versions[0].Schema.OpenAPIV3Schema.Properties["spec"]
+	if v == nil {
+		value = doc.Spec.Versions[0].Schema.OpenAPIV3Schema.Properties
+	} else {
+		value, err = ConvertMap(v)
+		if err != nil {
+			return cmdOutput{}, err
+		}
+	}
+
+	obj := &unstructured.Unstructured{
+		Object: make(map[string]interface{}, 0),
+	}
+	unstructured.SetNestedSlice(obj.Object, ConvertSlice([]string{resourceName}), "properties", "resources", "enum")
+	unstructured.SetNestedMap(obj.Object, value, "properties", "config")
+	unstructured.SetNestedField(obj.Object, fmt.Sprintf("%s configuration options", resourceName), "properties", "config", "title")
+
+	// setting GVK for the resource
+	if len(doc.Spec.Versions) > 0 {
+		unstructured.SetNestedMap(obj.Object, map[string]interface{}{
+			"type":        "string",
+			"description": "APIVersion for the resource",
+			"default":     fmt.Sprintf("%s/%s", doc.Spec.Group, doc.Spec.Versions[0].Name),
+		},
+			"properties", "apiVersion")
+		unstructured.SetNestedMap(obj.Object, map[string]interface{}{
+			"type":        "string",
+			"description": "Kind for the resource",
+			"default":     doc.Spec.Names.Kind,
+		},
+			"properties", "kind")
+	}
+
+	// add a property to define the namespace for the resource
+	if doc.Spec.Scope == "Namespaced" {
+		unstructured.SetNestedMap(obj.Object, map[string]interface{}{
+			"type":        "string",
+			"description": "Namespace for the resource",
+			"namespace":   "default",
+		},
+			"properties", "namespace")
+	}
+
+	// add verifiers to the resource
+	if len(verifiers) > 0 {
+		var convertedVerifiers []interface{} = make([]interface{}, len(verifiers))
+		for i, v := range verifiers {
+			convertedVerifiers[i] = v
+		}
+
+		unstructured.SetNestedMap(obj.Object, map[string]interface{}{
+			"type":        "array",
+			"description": "verifiers to be used against the resource",
+			"items":       map[string]interface{}{"type": "string"},
+			"default":     convertedVerifiers,
+		},
+			"properties", "verifiers")
+	}
+	return obj.Object, nil
 }
 
 func ConvertSlice(strSlice []string) []interface{} {
