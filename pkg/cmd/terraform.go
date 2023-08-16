@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"log"
 	"os"
@@ -23,13 +22,8 @@ var (
 			"If the templatePath and insertionPoint flags are set, generated objects are merged into the given template at given insertion point.\n" +
 			"Otherwise a yaml file with two keys are generated. The properties key contains the generated form input. " +
 			"The required key contains the TF variable names that do not have defaults.",
-		PreRunE: func(cmd *cobra.Command, args []string) error {
-			if !isDirectory(inputDir) {
-				return errors.New("inputDir and ouputDir entries need to be directories")
-			}
-			return nil
-		},
-		RunE: tfE,
+		PreRunE: templatePreRunE,
+		RunE:    tfE,
 	}
 )
 

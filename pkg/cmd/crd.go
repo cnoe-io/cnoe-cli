@@ -36,22 +36,15 @@ func init() {
 	crdCmd.Flags().StringVarP(&templateName, "templateName", "", "", "sets the name of the template")
 	crdCmd.Flags().StringVarP(&templateTitle, "templateTitle", "", "", "sets the title of the template")
 	crdCmd.Flags().StringVarP(&templateDescription, "templateDescription", "", "", "sets the description of the template")
-
-	crdCmd.MarkFlagRequired("templatePath")
 }
 
 var (
 	crdCmd = &cobra.Command{
-		Use:   "crd",
-		Short: "Generate backstage templates from CRD/XRD",
-		Long:  `Generate backstage templates from supplied CRD and XRD definitions`,
-		PreRunE: func(cmd *cobra.Command, args []string) error {
-			if !isDirectory(inputDir) {
-				return errors.New("inputDir and ouputDir entries need to be directories")
-			}
-			return nil
-		},
-		RunE: crd,
+		Use:     "crd",
+		Short:   "Generate backstage templates from CRD/XRD",
+		Long:    `Generate backstage templates from supplied CRD and XRD definitions`,
+		PreRunE: templatePreRunE,
+		RunE:    crd,
 	}
 )
 

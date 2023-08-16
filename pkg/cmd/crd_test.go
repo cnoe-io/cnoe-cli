@@ -15,9 +15,6 @@ var _ = Describe("Template CRDs", func() {
 	var (
 		tempDir   string
 		outputDir string
-
-		//stdout *gbytes.Buffer
-		//stderr *gbytes.Buffer
 	)
 
 	const (
@@ -25,13 +22,11 @@ var _ = Describe("Template CRDs", func() {
 		templateTitle       = "test-title"
 		templateDescription = "test-description"
 
-		inputDir                  = "./fakes/crd/valid/input"
-		validOutputDir            = "./fakes/crd/valid/output"
-		invalidInputDir           = "./fakes/invalid-in-resource"
-		templateFile              = "./fakes/template/input-template.yaml"
-		expectedTemplateFile      = "./fakes/crd/valid/output/full-template-oneof.yaml"
-		expectedResourceFileSpark = "./fakes/crd/valid/output/properties-sparkoperator.k8s.io.sparkapplication"
-		expectedResourceFileCDN   = "./fakes/crd/valid/output/properties-awsblueprints.io.xcdn"
+		inputDir             = "./fakes/crd/valid/input"
+		validOutputDir       = "./fakes/crd/valid/output"
+		invalidInputDir      = "./fakes/crd/invalid/input"
+		templateFile         = "./fakes/template/input-template.yaml"
+		expectedTemplateFile = "./fakes/crd/valid/output/full-template-oneof.yaml"
 	)
 
 	BeforeEach(func() {
@@ -108,27 +103,18 @@ var _ = Describe("Template CRDs", func() {
 		})
 	})
 
-	Context("with valid input only", func() {
+	Context("with invalid input only", func() {
 		BeforeEach(func() {
-			err := cmd.Crd(context.Background(), inputDir, outputDir, "", "",
+			err := cmd.Crd(context.Background(), invalidInputDir, outputDir, "", "",
 				[]string{}, false, templateName, templateTitle, templateDescription,
 			)
 			Expect(err).NotTo(HaveOccurred())
 		})
 
-		It("should create properties only ", func() {
+		It("should not create any files", func() {
 			files, err := os.ReadDir(outputDir)
 			Expect(err).NotTo(HaveOccurred())
-			Expect(len(files)).To(Equal(2))
-			for i := range files {
-				filePath := filepath.Join(outputDir, files[i].Name())
-				generated, err := os.ReadFile(filePath)
-				Expect(err).NotTo(HaveOccurred())
-				propFile := fmt.Sprintf("properties-%s", files[i].Name())
-				expected, err := os.ReadFile(filepath.Join(validOutputDir, propFile))
-				Expect(err).NotTo(HaveOccurred())
-				Expect(generated).To(MatchYAML(expected))
-			}
+			Expect(len(files)).To(Equal(0))
 		})
 	})
 })
