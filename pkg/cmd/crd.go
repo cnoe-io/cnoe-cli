@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"log"
@@ -45,7 +46,7 @@ var (
 		Short: "Generate backstage templates from CRD/XRD",
 		Long:  `Generate backstage templates from supplied CRD and XRD definitions`,
 		PreRunE: func(cmd *cobra.Command, args []string) error {
-			if !isDirectory(inputDir) || !isDirectory(outputDir) {
+			if !isDirectory(inputDir) {
 				return errors.New("inputDir and ouputDir entries need to be directories")
 			}
 			return nil
@@ -61,15 +62,16 @@ type cmdOutput struct {
 
 func crd(cmd *cobra.Command, args []string) error {
 	return Crd(
-		inputDir, outputDir, templatePath,
-		verifiers, namespaced, useOneOf,
+		cmd.Context(),
+		inputDir, outputDir, templatePath, insertionPoint,
+		verifiers, useOneOf,
 		templateName, templateTitle, templateDescription,
 	)
 }
 
 func Crd(
-	inputDir, outputDir, templatePath string,
-	verifiers []string, namespaced, useOneOf bool,
+	ctx context.Context, inputDir, outputDir, templatePath, insertionPoint string,
+	verifiers []string, useOneOf bool,
 	templateName, templateTitle, templateDescription string,
 ) error {
 	inDir, outDir, template, err := prepDirectories(inputDir, outputDir, templatePath, useOneOf)
@@ -81,23 +83,30 @@ func Crd(
 		return err
 	}
 	log.Printf("processing %d definitions", len(defs))
-	output, err := writeSchema(
-		outDir,
+
+	schemaDir := outDir
+	if useOneOf {
+		schemaDir = filepath.Join(outDir, defDir)
+		output, err := writeSchema(
+			ctx,
+			schemaDir,
+			"",
+			"",
+			defs,
+		)
+		if err != nil {
+			return err
+		}
+		templateFile := filepath.Join(outDir, "template.yaml")
+		return writeOneOf(ctx, templateFile, template, insertionPoint, output.Templates)
+	}
+	_, err = writeSchema(
+		ctx,
+		schemaDir,
+		insertionPoint,
+		template,
 		defs,
 	)
-	if err != nil {
-		return err
-	}
-
-	err = writeToTemplate(
-		template,
-		outDir,
-		output.Resources, 0,
-		templateName,
-		templateTitle,
-		templateDescription,
-	)
-
 	if err != nil {
 		return err
 	}
@@ -132,35 +141,46 @@ func findDefs(file os.DirEntry, currentDepth uint32, base string) ([]string, err
 	return []string{f}, nil
 }
 
-func writeSchema(outputDir string, defs []string) (cmdOutput, error) {
+func writeSchema(ctx context.Context, outputDir, insertionPoint, templateFile string, defs []string) (cmdOutput, error) {
 	out := cmdOutput{
 		Templates: make([]string, 0),
 		Resources: make([]string, 0),
 	}
-	templateOutputDir := fmt.Sprintf("%s/%s", outputDir, defDir)
 
 	for _, def := range defs {
-		converted, err := convert(def)
+		converted, resourceName, err := convert(def)
 		if err != nil {
 			var e NotSupported
-			if !errors.As(err, &e) {
+			if errors.As(err, &e) {
+				continue
+			}
+			return cmdOutput{}, err
+		}
+		filename := filepath.Join(outputDir, fmt.Sprintf("%s.yaml", strings.ToLower(resourceName)))
+		if templateFile != "" && insertionPoint != "" {
+			input := insertAtInput{
+				templatePath:     templateFile,
+				jqPathExpression: insertionPoint,
+			}
+			props := converted.(map[string]any)
+			if v, reqOk := props["required"]; reqOk {
+				if reqs, ok := v.([]string); ok {
+					input.required = reqs
+				}
+			}
+			input.fields = props
+			t, err := insertAt(ctx, input)
+			if err != nil {
 				return cmdOutput{}, err
 			}
+			converted = t
 		}
-		wrapperData, err := yaml.Marshal(converted)
+		err = writeOutput(converted, filename)
 		if err != nil {
-			log.Printf("failed %s: %s \n", def, err.Error())
+			log.Printf("failed to write %s: %s \n", def, err.Error())
 			return cmdOutput{}, err
 		}
-
-		template := fmt.Sprintf("%s/%s.yaml", templateOutputDir, strings.ToLower(resourceName))
-		err = os.WriteFile(template, wrapperData, 0644)
-		if err != nil {
-			log.Printf("failed %s: %s \n", def, err.Error())
-			return cmdOutput{}, err
-		}
-
-		out.Templates = append(out.Templates, template)
+		out.Templates = append(out.Templates, filename)
 		out.Resources = append(out.Resources, resourceName)
 	}
 
@@ -200,14 +220,6 @@ func writeToTemplate(
 		} `yaml:"resources,omitempty"`
 	}{}
 
-	resources := struct {
-		Type string   `yaml:"type"`
-		Enum []string `yaml:"enum"`
-	}{
-		Type: "string",
-		Enum: identifiedResources,
-	}
-
 	for _, r := range identifiedResources {
 		dependencies.Resources.OneOf = append(dependencies.Resources.OneOf, map[string]interface{}{
 			"$yaml": fmt.Sprintf("resources/%s.yaml", strings.ToLower(r)),
@@ -218,7 +230,6 @@ func writeToTemplate(
 		return errors.New("not the right template or input format")
 	}
 
-	doc.Spec.Parameters[position].Properties["resources"] = resources
 	doc.Spec.Parameters[position].Dependencies = dependencies
 
 	outputData, err := yaml.Marshal(&doc)
@@ -234,22 +245,22 @@ func writeToTemplate(
 	return nil
 }
 
-func convert(def string) (any, error) {
+func convert(def string) (any, string, error) {
 	data, err := os.ReadFile(def)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 	var doc models.Definition
 	err = yaml.Unmarshal(data, &doc)
 	if err != nil {
 		log.Printf("failed to read %s. This file will be excluded. %s", def, err)
-		return nil, NotSupported{
+		return nil, "", NotSupported{
 			fmt.Errorf("%s is not a kubernetes file", def),
 		}
 	}
 
 	if !isXRD(doc) && !isCRD(doc) {
-		return nil, NotSupported{
+		return nil, "", NotSupported{
 			fmt.Errorf("%s is not a CRD or XRD", def),
 		}
 	}
@@ -268,14 +279,13 @@ func convert(def string) (any, error) {
 	} else {
 		value, err = ConvertMap(v)
 		if err != nil {
-			return cmdOutput{}, err
+			return cmdOutput{}, "", err
 		}
 	}
 
 	obj := &unstructured.Unstructured{
 		Object: make(map[string]interface{}, 0),
 	}
-	unstructured.SetNestedSlice(obj.Object, ConvertSlice([]string{resourceName}), "properties", "resources", "enum")
 	unstructured.SetNestedMap(obj.Object, value, "properties", "config")
 	unstructured.SetNestedField(obj.Object, fmt.Sprintf("%s configuration options", resourceName), "properties", "config", "title")
 
@@ -320,7 +330,7 @@ func convert(def string) (any, error) {
 		},
 			"properties", "verifiers")
 	}
-	return obj.Object, nil
+	return obj.Object, resourceName, nil
 }
 
 func ConvertSlice(strSlice []string) []interface{} {

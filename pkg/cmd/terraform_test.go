@@ -123,7 +123,7 @@ var _ = Describe("Terraform Template", func() {
 		})
 	})
 
-	Context("with a root directory specified", func() {
+	Context("with a root directory and oneOf flag specified", func() {
 		BeforeEach(func() {
 			err := terraform(context.Background(), validInputRootDir, outputDir, targetTemplateFile, ".spec.parameters[0]", true)
 			Expect(err).NotTo(HaveOccurred())

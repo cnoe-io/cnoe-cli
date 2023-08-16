@@ -25,7 +25,7 @@ func (n NotSupported) Error() string {
 type insertAtInput struct {
 	templatePath     string
 	jqPathExpression string
-	fields           supportedFields
+	fields           map[string]any
 	required         []string
 }
 
@@ -69,7 +69,7 @@ func prepDirectories(inputDir, outputDir, templateFile string, oneOf bool) (stri
 	}
 	m := output
 	if oneOf {
-		m = fmt.Sprintf("%s/resources", output)
+		m = filepath.Join(output, defDir)
 	}
 	err = checkAndCreateDir(m)
 	if err != nil {
@@ -79,7 +79,9 @@ func prepDirectories(inputDir, outputDir, templateFile string, oneOf bool) (stri
 	return input, output, t, nil
 }
 
-func handleOneOf(ctx context.Context, outputFile, templatePath, insertionPoint string, resourceFiles []string) error {
+// Use the given template file, add dependencies and enum fields at the object specified by insertionPoint.
+// Write the result to a file specified by outputFile.
+func writeOneOf(ctx context.Context, outputFile, templatePath, insertionPoint string, resourceFiles []string) error {
 	input := insertAtInput{
 		templatePath:     templatePath,
 		jqPathExpression: insertionPoint,
@@ -92,18 +94,13 @@ func handleOneOf(ctx context.Context, outputFile, templatePath, insertionPoint s
 }
 
 func oneOf(ctx context.Context, resourceFiles []string, input insertAtInput) (any, error) {
-	resourcesPath := fmt.Sprintf(input.templatePath, "/resources")
-	err := os.MkdirAll(resourcesPath, 0755)
-	if err != nil {
-		return nil, err
-	}
 	n := make([]string, len(resourceFiles))
 	m := make([]map[string]string, len(resourceFiles))
 	for i := range resourceFiles {
 		fileName := filepath.Base(resourceFiles[i])
-		n[i] = fileName
+		n[i] = strings.TrimSuffix(fileName, ".yaml")
 		m[i] = map[string]string{
-			"$yaml": fmt.Sprintf("resources/%s.yaml", fileName),
+			"$yaml": filepath.Join(defDir, fileName),
 		}
 	}
 	props := map[string]any{
@@ -117,8 +114,11 @@ func oneOf(ctx context.Context, resourceFiles []string, input insertAtInput) (an
 			"oneOf": m,
 		},
 	}
-	input.fields.Properties = props
-	input.fields.Dependencies = deps
+	fields := map[string]any{
+		"properties":   props,
+		"dependencies": deps,
+	}
+	input.fields = fields
 
 	return insertAt(ctx, input)
 }

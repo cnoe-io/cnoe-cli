@@ -72,7 +72,7 @@ func terraform(ctx context.Context, inputDir, outputDir, templatePath, insertion
 			}
 		}
 		if useOneOf {
-			p := filepath.Join(outDir, "resources", fmt.Sprintf("%s.yaml", filepath.Base(path)))
+			p := filepath.Join(outDir, defDir, fmt.Sprintf("%s.yaml", filepath.Base(path)))
 			log.Printf("writing to %s", p)
 			err := handleOutput(ctx, p, "", "", params, required)
 			if err != nil {
@@ -86,29 +86,33 @@ func terraform(ctx context.Context, inputDir, outputDir, templatePath, insertion
 				return err
 			}
 		}
-
 	}
 	if useOneOf {
-		templateFile := fmt.Sprintf("%s/template.yaml", outDir)
-		return handleOneOf(ctx, templateFile, template, insertionPoint, mods)
-
+		templateFile := filepath.Join(outDir, "template.yaml")
+		resourceFileNames := make([]string, len(mods))
+		for i := range mods {
+			resourceFileNames[i] = fmt.Sprintf("%s.yaml", mods[i])
+		}
+		return writeOneOf(ctx, templateFile, template, insertionPoint, resourceFileNames)
 	}
 	return nil
 }
 
-func handleOutput(ctx context.Context, outputFile, templatePath, insertionPoint string, properties map[string]models.BackstageParamFields, required []string) error {
+func handleOutput(ctx context.Context, outputFile, templateFile, insertionPoint string, properties map[string]models.BackstageParamFields, required []string) error {
 	props := make(map[string]any, len(properties))
 	for k := range properties {
 		props[k] = properties[k]
 	}
-	if templatePath != "" && insertionPoint != "" {
+	if templateFile != "" && insertionPoint != "" {
 		input := insertAtInput{
-			templatePath:     templatePath,
+			templatePath:     templateFile,
 			jqPathExpression: insertionPoint,
-			fields: supportedFields{
-				Properties: props,
+			fields: map[string]any{
+				"properties": props,
 			},
-			required: required,
+		}
+		if len(required) > 0 {
+			input.required = required
 		}
 		t, err := insertAt(ctx, input)
 		if err != nil {

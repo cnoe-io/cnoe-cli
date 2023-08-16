@@ -1,0 +1,63 @@
+apiVersion: scaffolder.backstage.io/v1beta3
+kind: Template
+metadata:
+  description: Deploy Resource to Kubernetes
+  name: deploy-resources
+  title: Deploy Resources
+spec:
+  owner: guest
+  parameters:
+    - description: Select a AWS resource to add to your repository.
+      properties:
+        apiVersion:
+          default: sparkoperator.k8s.io/v1beta2
+          description: APIVersion for the resource
+          type: string
+        config:
+          properties:
+            arguments:
+              items:
+                type: string
+              type: array
+            batchScheduler:
+              type: string
+            batchSchedulerOptions:
+              properties:
+                priorityClassName:
+                  type: string
+                queue:
+                  type: string
+                resources:
+                  additionalProperties:
+                    anyOf:
+                      - type: integer
+                      - type: string
+                    pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                    x-kubernetes-int-or-string: true
+                  type: object
+              type: object
+          title: sparkoperator.k8s.io.SparkApplication configuration options
+        kind:
+          default: SparkApplication
+          description: Kind for the resource
+          type: string
+        name:
+          description: name of this resource. This will be the name of K8s object.
+          type: string
+        namespace:
+          description: Namespace for the resource
+          namespace: default
+          type: string
+        path:
+          default: kustomize/base
+          description: path to place this file into
+          type: string
+      required:
+        - awsResources
+        - name
+      title: Choose Resource
+  steps:
+    - action: cnoe:verify:dependency
+      id: verify
+      name: verify
+  type: service

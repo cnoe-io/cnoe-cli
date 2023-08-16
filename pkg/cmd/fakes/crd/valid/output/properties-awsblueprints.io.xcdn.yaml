@@ -1,0 +1,48 @@
+properties:
+  apiVersion:
+    default: awsblueprints.io/v1alpha1
+    description: APIVersion for the resource
+    type: string
+  config:
+    properties:
+      resourceConfig:
+        description: ResourceConfig defines general properties of this AWS resource.
+        properties:
+          deletionPolicy:
+            description: Defaults to Delete
+            enum:
+              - Delete
+              - Orphan
+            type: string
+          name:
+            description: Set the name of this resource in AWS to the value provided by this field.
+            type: string
+          providerConfigName:
+            type: string
+          region:
+            type: string
+          tags:
+            items:
+              properties:
+                key:
+                  type: string
+                value:
+                  type: string
+              required:
+                - key
+                - value
+              type: object
+            type: array
+        required:
+          - providerConfigName
+          - region
+          - tags
+        type: object
+    required:
+      - resourceConfig
+    title: awsblueprints.io.XCDN configuration options
+    type: object
+  kind:
+    default: XCDN
+    description: Kind for the resource
+    type: string
