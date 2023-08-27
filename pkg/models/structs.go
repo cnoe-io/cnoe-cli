@@ -52,35 +52,6 @@ type Wrapper struct {
 	Properties Props `json:"properties"`
 }
 
-type Template struct {
-	ApiVersion string `yaml:"apiVersion"`
-	Kind       string `yaml:"kind"`
-	Metadata   struct {
-		Name        string `yaml:"name"`
-		Title       string `yaml:"title"`
-		Description string `yaml:"description"`
-	} `yaml:"metadata"`
-	Spec struct {
-		Owner      string `yaml:"owner"`
-		Type       string `yaml:"type"`
-		Parameters []struct {
-			Properties   map[string]interface{} `yaml:"properties"`
-			Dependencies struct {
-				Resources struct {
-					OneOf []map[string]interface{} `yaml:"oneOf,omitempty"`
-				} `yaml:"resources,omitempty"`
-			} `yaml:"dependencies,omitempty"`
-		} `yaml:"parameters"`
-
-		Steps []struct {
-			Id     string                 `yaml:"id"`
-			Name   string                 `yaml:"name"`
-			Action string                 `yaml:"action"`
-			Input  map[string]interface{} `yaml:"input"`
-		} `yaml:"steps"`
-	} `yaml:"spec"`
-}
-
 type BackstageParamFields struct {
 	Title                string `yaml:",omitempty"`
 	Type                 string

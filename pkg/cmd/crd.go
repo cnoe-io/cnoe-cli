@@ -16,7 +16,6 @@ import (
 )
 
 const (
-	defDir  = "resources"
 	KindXRD = "CompositeResourceDefinition"
 	KindCRD = "CustomResourceDefinition"
 )
@@ -56,52 +55,45 @@ type cmdOutput struct {
 func crd(cmd *cobra.Command, args []string) error {
 	return Crd(
 		cmd.Context(),
-		inputDir, outputDir, templatePath, insertionPoint,
-		verifiers, useOneOf,
-		templateName, templateTitle, templateDescription,
+		inputDir, outputDir, templatePath, insertionPoint, collapsed,
+		verifiers, templateName, templateTitle, templateDescription,
 	)
 }
 
 func Crd(
-	ctx context.Context, inputDir, outputDir, templatePath, insertionPoint string,
-	verifiers []string, useOneOf bool,
-	templateName, templateTitle, templateDescription string,
+	ctx context.Context, inputDir, outputDir, templatePath, insertionPoint string, collapsed bool,
+	verifiers []string, templateName, templateTitle, templateDescription string,
 ) error {
-	inDir, outDir, template, err := prepDirectories(inputDir, outputDir, templatePath, useOneOf)
+	inDir, expectedOutDir, template, err := prepDirectories(inputDir, outputDir, templatePath, collapsed)
 	if err != nil {
 		return err
 	}
+
 	defs, err := getDefs(inDir, 0)
 	if err != nil {
 		return err
 	}
 	log.Printf("processing %d definitions", len(defs))
 
-	schemaDir := outDir
-	if useOneOf {
-		schemaDir = filepath.Join(outDir, defDir)
-		output, err := writeSchema(
-			ctx,
-			schemaDir,
-			"",
-			"",
-			defs,
-		)
-		if err != nil {
-			return err
-		}
-		templateFile := filepath.Join(outDir, "template.yaml")
-		return writeOneOf(ctx, templateFile, template, insertionPoint, output.Templates)
-	}
-	_, err = writeSchema(
+	output, err := writeSchema(
 		ctx,
-		schemaDir,
+		expectedOutDir,
 		insertionPoint,
 		template,
 		defs,
+		collapsed,
 	)
 	if err != nil {
 		return err
+	}
+
+	if collapsed {
+		templateFile := filepath.Join(expectedOutDir, "../template.yaml")
+		input := insertAtInput{
+			templatePath:     template,
+			jqPathExpression: insertionPoint,
+		}
+		return writeOneOf(ctx, input, templateFile, output.Templates)
 	}
 
 	return nil
@@ -134,7 +126,7 @@ func findDefs(file os.DirEntry, currentDepth uint32, base string) ([]string, err
 	return []string{f}, nil
 }
 
-func writeSchema(ctx context.Context, outputDir, insertionPoint, templateFile string, defs []string) (cmdOutput, error) {
+func writeSchema(ctx context.Context, outputDir, insertionPoint, templateFile string, defs []string, collapsed bool) (cmdOutput, error) {
 	out := cmdOutput{
 		Templates: make([]string, 0),
 		Resources: make([]string, 0),
@@ -149,8 +141,10 @@ func writeSchema(ctx context.Context, outputDir, insertionPoint, templateFile st
 			}
 			return cmdOutput{}, err
 		}
+
 		filename := filepath.Join(outputDir, fmt.Sprintf("%s.yaml", strings.ToLower(resourceName)))
-		if templateFile != "" && insertionPoint != "" {
+
+		if !collapsed {
 			input := insertAtInput{
 				templatePath:     templateFile,
 				jqPathExpression: insertionPoint,
@@ -168,6 +162,7 @@ func writeSchema(ctx context.Context, outputDir, insertionPoint, templateFile st
 			}
 			converted = t
 		}
+
 		err = writeOutput(converted, filename)
 		if err != nil {
 			log.Printf("failed to write %s: %s \n", def, err.Error())
@@ -178,64 +173,6 @@ func writeSchema(ctx context.Context, outputDir, insertionPoint, templateFile st
 	}
 
 	return out, nil
-}
-
-func writeToTemplate(
-	templateFile string, outputPath string, identifiedResources []string, position int,
-	templateName, templateTitle, templateDescription string,
-) error {
-	templateData, err := os.ReadFile(templateFile)
-	if err != nil {
-		return err
-	}
-
-	var doc models.Template
-	err = yaml.Unmarshal(templateData, &doc)
-	if err != nil {
-		return err
-	}
-
-	if templateName != "" {
-		doc.Metadata.Name = templateName
-	}
-
-	if templateTitle != "" {
-		doc.Metadata.Title = templateTitle
-	}
-
-	if templateDescription != "" {
-		doc.Metadata.Description = templateDescription
-	}
-
-	dependencies := struct {
-		Resources struct {
-			OneOf []map[string]interface{} `yaml:"oneOf,omitempty"`
-		} `yaml:"resources,omitempty"`
-	}{}
-
-	for _, r := range identifiedResources {
-		dependencies.Resources.OneOf = append(dependencies.Resources.OneOf, map[string]interface{}{
-			"$yaml": fmt.Sprintf("resources/%s.yaml", strings.ToLower(r)),
-		})
-	}
-
-	if len(doc.Spec.Parameters) <= position {
-		return errors.New("not the right template or input format")
-	}
-
-	doc.Spec.Parameters[position].Dependencies = dependencies
-
-	outputData, err := yaml.Marshal(&doc)
-	if err != nil {
-		return err
-	}
-
-	err = os.WriteFile(fmt.Sprintf("%s/template.yaml", outputPath), outputData, 0644)
-	if err != nil {
-		return err
-	}
-
-	return nil
 }
 
 func convert(def string) (any, string, error) {
@@ -257,6 +194,7 @@ func convert(def string) (any, string, error) {
 			fmt.Errorf("%s is not a CRD or XRD", def),
 		}
 	}
+
 	var resourceName string
 	if doc.Spec.ClaimNames != nil {
 		resourceName = doc.Spec.ClaimNames.Kind

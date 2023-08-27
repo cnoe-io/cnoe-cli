@@ -32,7 +32,7 @@ func init() {
 }
 
 func tfE(cmd *cobra.Command, args []string) error {
-	return terraform(cmd.Context(), inputDir, outputDir, templatePath, insertionPoint, useOneOf)
+	return terraform(cmd.Context(), inputDir, outputDir, templatePath, insertionPoint, collapsed)
 }
 
 func terraform(ctx context.Context, inputDir, outputDir, templatePath, insertionPoint string, useOneOf bool) error {
@@ -66,7 +66,7 @@ func terraform(ctx context.Context, inputDir, outputDir, templatePath, insertion
 			}
 		}
 		if useOneOf {
-			p := filepath.Join(outDir, defDir, fmt.Sprintf("%s.yaml", filepath.Base(path)))
+			p := filepath.Join(outDir, DefinitionsDir, fmt.Sprintf("%s.yaml", filepath.Base(path)))
 			log.Printf("writing to %s", p)
 			err := handleOutput(ctx, p, "", "", params, required)
 			if err != nil {
@@ -87,7 +87,11 @@ func terraform(ctx context.Context, inputDir, outputDir, templatePath, insertion
 		for i := range mods {
 			resourceFileNames[i] = fmt.Sprintf("%s.yaml", mods[i])
 		}
-		return writeOneOf(ctx, templateFile, template, insertionPoint, resourceFileNames)
+		input := insertAtInput{
+			templatePath:     template,
+			jqPathExpression: insertionPoint,
+		}
+		return writeOneOf(ctx, input, templateFile, resourceFileNames)
 	}
 	return nil
 }

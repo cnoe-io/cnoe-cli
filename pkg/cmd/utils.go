@@ -67,25 +67,22 @@ func prepDirectories(inputDir, outputDir, templateFile string, oneOf bool) (stri
 	if err != nil {
 		return "", "", "", err
 	}
-	m := output
+	expectedOutput := output
 	if oneOf {
-		m = filepath.Join(output, defDir)
+		expectedOutput = filepath.Join(output, DefinitionsDir)
 	}
-	err = checkAndCreateDir(m)
+	err = checkAndCreateDir(expectedOutput)
 	if err != nil {
 		return "", "", "", err
 	}
 
-	return input, output, t, nil
+	return input, expectedOutput, t, nil
 }
 
 // Use the given template file, add dependencies and enum fields at the object specified by insertionPoint.
 // Write the result to a file specified by outputFile.
-func writeOneOf(ctx context.Context, outputFile, templatePath, insertionPoint string, resourceFiles []string) error {
-	input := insertAtInput{
-		templatePath:     templatePath,
-		jqPathExpression: insertionPoint,
-	}
+func writeOneOf(ctx context.Context, input insertAtInput, outputFile string, resourceFiles []string) error {
+
 	t, err := oneOf(ctx, resourceFiles, input)
 	if err != nil {
 		return err
@@ -100,7 +97,7 @@ func oneOf(ctx context.Context, resourceFiles []string, input insertAtInput) (an
 		fileName := filepath.Base(resourceFiles[i])
 		n[i] = strings.TrimSuffix(fileName, ".yaml")
 		m[i] = map[string]string{
-			"$yaml": filepath.Join(defDir, fileName),
+			"$yaml": filepath.Join(DefinitionsDir, fileName),
 		}
 	}
 	props := map[string]any{

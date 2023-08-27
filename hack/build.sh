@@ -2,6 +2,7 @@
 
 set -e -x -u
 
+go mod tidy
 # go test ./...
 go fmt ./cmd/... ./pkg/...
 
