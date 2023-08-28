@@ -55,16 +55,20 @@ type cmdOutput struct {
 func crd(cmd *cobra.Command, args []string) error {
 	return Crd(
 		cmd.Context(),
-		inputDir, outputDir, templatePath, insertionPoint, collapsed,
+		inputDir, outputDir, templatePath, insertionPoint, collapsed, raw,
 		verifiers, templateName, templateTitle, templateDescription,
 	)
 }
 
 func Crd(
-	ctx context.Context, inputDir, outputDir, templatePath, insertionPoint string, collapsed bool,
+	ctx context.Context, inputDir, outputDir, templatePath, insertionPoint string, collapsed, raw bool,
 	verifiers []string, templateName, templateTitle, templateDescription string,
 ) error {
-	inDir, expectedOutDir, template, err := prepDirectories(inputDir, outputDir, templatePath, collapsed)
+	inDir, expectedOutDir, template, err := prepDirectories(
+		inputDir,
+		outputDir,
+		templatePath,
+		collapsed && !raw /* only generate nesting if needs to be collapsed and not be raw*/)
 	if err != nil {
 		return err
 	}
@@ -82,12 +86,13 @@ func Crd(
 		template,
 		defs,
 		collapsed,
+		raw,
 	)
 	if err != nil {
 		return err
 	}
 
-	if collapsed {
+	if collapsed && !raw {
 		templateFile := filepath.Join(expectedOutDir, "../template.yaml")
 		input := insertAtInput{
 			templatePath:     template,
@@ -126,7 +131,7 @@ func findDefs(file os.DirEntry, currentDepth uint32, base string) ([]string, err
 	return []string{f}, nil
 }
 
-func writeSchema(ctx context.Context, outputDir, insertionPoint, templateFile string, defs []string, collapsed bool) (cmdOutput, error) {
+func writeSchema(ctx context.Context, outputDir, insertionPoint, templateFile string, defs []string, collapsed, raw bool) (cmdOutput, error) {
 	out := cmdOutput{
 		Templates: make([]string, 0),
 		Resources: make([]string, 0),
@@ -144,7 +149,7 @@ func writeSchema(ctx context.Context, outputDir, insertionPoint, templateFile st
 
 		filename := filepath.Join(outputDir, fmt.Sprintf("%s.yaml", strings.ToLower(resourceName)))
 
-		if !collapsed {
+		if !collapsed && !raw {
 			input := insertAtInput{
 				templatePath:     templateFile,
 				jqPathExpression: insertionPoint,

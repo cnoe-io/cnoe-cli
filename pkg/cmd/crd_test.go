@@ -46,7 +46,7 @@ var _ = Describe("Template CRDs", func() {
 
 	Context("with valid input with oneof", func() {
 		BeforeEach(func() {
-			err := cmd.Crd(context.Background(), inputDir, outputDir, templateFile, ".spec.parameters[0]", true,
+			err := cmd.Crd(context.Background(), inputDir, outputDir, templateFile, ".spec.parameters[0]", true, false,
 				[]string{}, templateName, templateTitle, templateDescription,
 			)
 			Expect(err).NotTo(HaveOccurred())
@@ -81,7 +81,7 @@ var _ = Describe("Template CRDs", func() {
 
 	Context("with valid input and specify template file and jq path", func() {
 		BeforeEach(func() {
-			err := cmd.Crd(context.Background(), inputDir, outputDir, templateFile, ".spec.parameters[0]", false,
+			err := cmd.Crd(context.Background(), inputDir, outputDir, templateFile, ".spec.parameters[0]", false, false,
 				[]string{}, templateName, templateTitle, templateDescription,
 			)
 			Expect(err).NotTo(HaveOccurred())
@@ -105,7 +105,7 @@ var _ = Describe("Template CRDs", func() {
 
 	Context("with invalid input only", func() {
 		BeforeEach(func() {
-			err := cmd.Crd(context.Background(), invalidInputDir, outputDir, "", "", false,
+			err := cmd.Crd(context.Background(), invalidInputDir, outputDir, "", "", false, false,
 				[]string{}, templateName, templateTitle, templateDescription,
 			)
 			Expect(err).NotTo(HaveOccurred())

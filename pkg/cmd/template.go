@@ -22,6 +22,7 @@ var (
 	outputDir      string
 	templatePath   string
 	collapsed      bool
+	raw            bool
 )
 
 func init() {
@@ -32,6 +33,7 @@ func init() {
 	templateCmd.PersistentFlags().Uint32Var(&depth, "depth", 2, "depth from given directory to search for TF modules or CRDs")
 	templateCmd.PersistentFlags().StringVarP(&insertionPoint, "insertAt", "p", ".spec.parameters[0]", "jq path within the template to insert backstage info")
 	templateCmd.PersistentFlags().BoolVarP(&collapsed, "collapse", "c", false, "if set to true, items are rendered and collapsed as drop down items in a single specified template")
+	templateCmd.PersistentFlags().BoolVarP(&raw, "raw", "", false, "prints the raw open API output without putting it into a template (ignoring `templatePath` and `insertAt`)")
 
 	templateCmd.MarkFlagRequired("inputDir")
 	templateCmd.MarkFlagRequired("outputDir")
@@ -42,8 +44,12 @@ func templatePreRunE(cmd *cobra.Command, args []string) error {
 		return errors.New("inputDir must be a directory")
 	}
 
-	if collapsed && templatePath == "" {
+	if collapsed && templatePath == "" && !raw {
 		return errors.New("templatePath flag must be specified when using the `collapse` flag (optionally you can use `insertAt` as well.)")
+	}
+
+	if templatePath == "" && !raw {
+		return errors.New("you either need to use the `raw` flag to generate raw OpenAPI files or define a `templatePath` for the tool to populate.")
 	}
 
 	return nil

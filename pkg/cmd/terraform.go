@@ -32,11 +32,19 @@ func init() {
 }
 
 func tfE(cmd *cobra.Command, args []string) error {
-	return terraform(cmd.Context(), inputDir, outputDir, templatePath, insertionPoint, collapsed)
+	return terraform(cmd.Context(), inputDir, outputDir, templatePath, insertionPoint, collapsed, raw)
 }
 
-func terraform(ctx context.Context, inputDir, outputDir, templatePath, insertionPoint string, useOneOf bool) error {
-	inDir, outDir, template, err := prepDirectories(inputDir, outputDir, templatePath, useOneOf)
+func terraform(ctx context.Context, inputDir, outputDir, templatePath, insertionPoint string, collapsed, raw bool) error {
+	inDir, expectedOutDir, template, err := prepDirectories(
+		inputDir,
+		outputDir,
+		templatePath,
+		collapsed && !raw /* only generate nesting if needs to be collapsed and not be raw*/)
+	if err != nil {
+		return err
+	}
+
 	mods, err := getModules(inDir, 0)
 	if err != nil {
 		return err
@@ -53,9 +61,10 @@ func terraform(ctx context.Context, inputDir, outputDir, templatePath, insertion
 			return diag.Err()
 		}
 		if len(mod.Variables) == 0 {
-			log.Printf(fmt.Sprintf("module %s does not have variables", path))
+			log.Printf("module %s does not have variables", path)
 			continue
 		}
+
 		params := make(map[string]models.BackstageParamFields)
 		required := make([]string, 0)
 		log.Printf("converting %d variables", len(mod.Variables))
@@ -65,24 +74,17 @@ func terraform(ctx context.Context, inputDir, outputDir, templatePath, insertion
 				required = append(required, j)
 			}
 		}
-		if useOneOf {
-			p := filepath.Join(outDir, DefinitionsDir, fmt.Sprintf("%s.yaml", filepath.Base(path)))
-			log.Printf("writing to %s", p)
-			err := handleOutput(ctx, p, "", "", params, required)
-			if err != nil {
-				return err
-			}
-		} else {
-			p := filepath.Join(outDir, fmt.Sprintf("%s.yaml", filepath.Base(path)))
-			log.Printf("writing to %s", p)
-			err := handleOutput(ctx, p, template, insertionPoint, params, required)
-			if err != nil {
-				return err
-			}
+
+		p := filepath.Join(expectedOutDir, fmt.Sprintf("%s.yaml", filepath.Base(path)))
+		log.Printf("writing to %s", p)
+		err = handleOutput(ctx, p, template, insertionPoint, params, required, collapsed, raw)
+		if err != nil {
+			return err
 		}
 	}
-	if useOneOf {
-		templateFile := filepath.Join(outDir, "template.yaml")
+
+	if collapsed && !raw {
+		templateFile := filepath.Join(expectedOutDir, "../template.yaml")
 		resourceFileNames := make([]string, len(mods))
 		for i := range mods {
 			resourceFileNames[i] = fmt.Sprintf("%s.yaml", mods[i])
@@ -96,12 +98,12 @@ func terraform(ctx context.Context, inputDir, outputDir, templatePath, insertion
 	return nil
 }
 
-func handleOutput(ctx context.Context, outputFile, templateFile, insertionPoint string, properties map[string]models.BackstageParamFields, required []string) error {
+func handleOutput(ctx context.Context, outputFile, templateFile, insertionPoint string, properties map[string]models.BackstageParamFields, required []string, collapsed, raw bool) error {
 	props := make(map[string]any, len(properties))
 	for k := range properties {
 		props[k] = properties[k]
 	}
-	if templateFile != "" && insertionPoint != "" {
+	if !raw && !collapsed {
 		input := insertAtInput{
 			templatePath:     templateFile,
 			jqPathExpression: insertionPoint,

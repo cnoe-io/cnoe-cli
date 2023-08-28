@@ -45,7 +45,7 @@ var _ = Describe("Terraform Template", func() {
 
 	Context("with valid input and no target template specified", func() {
 		BeforeEach(func() {
-			err := terraform(context.Background(), inputDir, outputDir, "", "", false)
+			err := terraform(context.Background(), inputDir, outputDir, "", "", false, true)
 			Expect(err).NotTo(HaveOccurred())
 		})
 
@@ -60,7 +60,7 @@ var _ = Describe("Terraform Template", func() {
 	})
 	Context("with valid input and a target template specified", func() {
 		BeforeEach(func() {
-			err := terraform(context.Background(), inputDir, outputDir, targetTemplateFile, ".spec.parameters[0]", false)
+			err := terraform(context.Background(), inputDir, outputDir, targetTemplateFile, ".spec.parameters[0]", false, false)
 			Expect(err).NotTo(HaveOccurred())
 		})
 
@@ -83,7 +83,7 @@ var _ = Describe("Terraform Template", func() {
 	})
 	Context("with valid input with required variable and a target template specified", func() {
 		BeforeEach(func() {
-			err := terraform(context.Background(), inputDirWithRequire, outputDir, targetTemplateFile, ".spec.parameters[0]", false)
+			err := terraform(context.Background(), inputDirWithRequire, outputDir, targetTemplateFile, ".spec.parameters[0]", false, false)
 			Expect(err).NotTo(HaveOccurred())
 		})
 
@@ -98,7 +98,7 @@ var _ = Describe("Terraform Template", func() {
 
 	Context("with a root directory specified", func() {
 		BeforeEach(func() {
-			err := terraform(context.Background(), validInputRootDir, outputDir, "", "", false)
+			err := terraform(context.Background(), validInputRootDir, outputDir, "", "", false, true)
 			Expect(err).NotTo(HaveOccurred())
 		})
 
@@ -118,14 +118,14 @@ var _ = Describe("Terraform Template", func() {
 
 	Context("with an invalid input and no target template specified", func() {
 		It("should return an error", func() {
-			err := terraform(context.Background(), "./fakes/terraform/invalid", outputDir, "", "", false)
+			err := terraform(context.Background(), "./fakes/terraform/invalid", outputDir, "", "", false, false)
 			Expect(err).Should(HaveOccurred())
 		})
 	})
 
 	Context("with a root directory and oneOf flag specified", func() {
 		BeforeEach(func() {
-			err := terraform(context.Background(), validInputRootDir, outputDir, targetTemplateFile, ".spec.parameters[0]", true)
+			err := terraform(context.Background(), validInputRootDir, outputDir, targetTemplateFile, ".spec.parameters[0]", true, false)
 			Expect(err).NotTo(HaveOccurred())
 		})
 
