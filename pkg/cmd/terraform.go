@@ -32,70 +32,106 @@ func init() {
 }
 
 func tfE(cmd *cobra.Command, args []string) error {
-	return terraform(cmd.Context(), inputDir, outputDir, templatePath, insertionPoint, collapsed, raw)
+	return Process(cmd.Context(), NewTerraformModule(inputDir, outputDir, templatePath, insertionPoint, collapsed, raw))
 }
 
-func terraform(ctx context.Context, inputDir, outputDir, templatePath, insertionPoint string, collapsed, raw bool) error {
-	inDir, expectedOutDir, template, err := prepDirectories(
-		inputDir,
-		outputDir,
-		templatePath,
-		collapsed && !raw /* only generate nesting if needs to be collapsed and not be raw*/)
-	if err != nil {
-		return err
+type TerraformModule struct {
+	EntityConfig
+}
+
+func NewTerraformModule(inputDir, outputDir, templatePath, insertionPoint string, collapsed, raw bool) Entity {
+
+	return &TerraformModule{
+		EntityConfig: EntityConfig{
+			InputDir:       inputDir,
+			OutputDir:      outputDir,
+			TemplateFile:   templatePath,
+			InsertionPoint: insertionPoint,
+			Collapsed:      collapsed,
+			Raw:            raw,
+		},
+	}
+}
+
+func (t *TerraformModule) Config() EntityConfig {
+	return t.EntityConfig
+}
+
+func (t *TerraformModule) HandleEntries(ctx context.Context, c EntryConfig) (ProcessOutput, error) {
+	out := ProcessOutput{
+		Templates: make([]string, 0),
+		Resources: make([]string, 0),
 	}
 
-	mods, err := getModules(inDir, 0)
-	if err != nil {
-		return err
-	}
-	if len(mods) == 0 {
-		return fmt.Errorf("could not find any TF modules in given directorr: %s", inDir)
-	}
-	log.Printf("processing %d modules", len(mods))
-	for i := range mods {
-		path := mods[i]
+	for i := range c.Definitions {
+		path := c.Definitions[i]
 		log.Printf("processing module at %s", path)
 		mod, diag := tfconfig.LoadModule(path)
 		if diag.HasErrors() {
-			return diag.Err()
+			return out, diag.Err()
 		}
+
 		if len(mod.Variables) == 0 {
 			log.Printf("module %s does not have variables", path)
 			continue
 		}
 
-		params := make(map[string]models.BackstageParamFields)
-		required := make([]string, 0)
-		log.Printf("converting %d variables", len(mod.Variables))
-		for j := range mod.Variables {
-			params[j] = convertVariable(*mod.Variables[j])
-			if mod.Variables[j].Required {
-				required = append(required, j)
-			}
-		}
+		params, required := prepareParamsAndRequired(mod)
 
-		p := filepath.Join(expectedOutDir, fmt.Sprintf("%s.yaml", filepath.Base(path)))
-		log.Printf("writing to %s", p)
-		err = handleOutput(ctx, p, template, insertionPoint, params, required, collapsed, raw)
+		fileName := fmt.Sprintf("%s.yaml", filepath.Base(path))
+		outputFile := filepath.Join(c.ExpectedOutDir, fileName)
+		err := handleModuleOutput(ctx, outputFile, c.TemplateFile, c.InsertionPoint, params, required, c.Collapsed, c.Raw)
 		if err != nil {
-			return err
+			return ProcessOutput{}, err
 		}
+
+		out.Templates = append(out.Templates, fileName)
 	}
 
-	if collapsed && !raw {
-		templateFile := filepath.Join(expectedOutDir, "../template.yaml")
-		resourceFileNames := make([]string, len(mods))
-		for i := range mods {
-			resourceFileNames[i] = fmt.Sprintf("%s.yaml", mods[i])
+	return out, nil
+}
+
+func prepareParamsAndRequired(mod *tfconfig.Module) (map[string]models.BackstageParamFields, []string) {
+	params := make(map[string]models.BackstageParamFields)
+	required := make([]string, 0)
+	for j := range mod.Variables {
+		params[j] = convertVariable(*mod.Variables[j])
+		if mod.Variables[j].Required {
+			required = append(required, j)
 		}
-		input := insertAtInput{
-			templatePath:     template,
-			jqPathExpression: insertionPoint,
-		}
-		return writeOneOf(ctx, input, templateFile, resourceFileNames)
 	}
-	return nil
+	return params, required
+}
+
+func handleModuleOutput(ctx context.Context, outputFile, templateFile, insertionPoint string, properties map[string]models.BackstageParamFields, required []string, collapsed, raw bool) error {
+	props := make(map[string]interface{}, len(properties))
+	for k := range properties {
+		props[k] = properties[k]
+	}
+
+	if !raw && !collapsed {
+		input := insertAtInput{
+			templatePath:     templateFile,
+			jqPathExpression: insertionPoint,
+			fields: map[string]interface{}{
+				"properties": props,
+			},
+		}
+		if len(required) > 0 {
+			input.required = required
+		}
+		t, err := insertAt(ctx, input)
+		if err != nil {
+			return fmt.Errorf("failed to insert to given template: %s", err)
+		}
+		return writeOutput(t, outputFile)
+	}
+
+	t := map[string]interface{}{
+		"properties": props,
+		"required":   required,
+	}
+	return writeOutput(t, outputFile)
 }
 
 func handleOutput(ctx context.Context, outputFile, templateFile, insertionPoint string, properties map[string]models.BackstageParamFields, required []string, collapsed, raw bool) error {
@@ -127,28 +163,28 @@ func handleOutput(ctx context.Context, outputFile, templateFile, insertionPoint 
 	return writeOutput(t, outputFile)
 }
 
-func getModules(inputDir string, currentDepth uint32) ([]string, error) {
+func (t *TerraformModule) GetDefinitions(inputDir string, currentDepth uint32) ([]string, error) {
 	if currentDepth > depth {
 		return nil, nil
 	}
 	if tfconfig.IsModuleDir(inputDir) {
 		return []string{inputDir}, nil
 	}
-	out, err := getRelevantFiles(inputDir, currentDepth, findModule)
+	out, err := getRelevantFiles(inputDir, currentDepth, t.findModule)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func findModule(file os.DirEntry, currentDepth uint32, base string) ([]string, error) {
+func (t *TerraformModule) findModule(file os.DirEntry, currentDepth uint32, base string) ([]string, error) {
 	f := filepath.Join(base, file.Name())
 	stat, err := os.Stat(f)
 	if err != nil {
 		return nil, err
 	}
 	if stat.IsDir() {
-		mods, err := getModules(f, currentDepth+1)
+		mods, err := t.GetDefinitions(f, currentDepth+1)
 		if err != nil {
 			return nil, err
 		}

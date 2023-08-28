@@ -1,8 +1,12 @@
 package cmd
 
 import (
+	"context"
 	"errors"
+	"log"
+	"path/filepath"
 
+	"github.com/cnoe-io/cnoe-cli/pkg/models"
 	"github.com/spf13/cobra"
 )
 
@@ -32,8 +36,8 @@ func init() {
 	templateCmd.PersistentFlags().StringVarP(&templatePath, "templatePath", "t", "", "path to the template to be augmented with backstage info")
 	templateCmd.PersistentFlags().Uint32Var(&depth, "depth", 2, "depth from given directory to search for TF modules or CRDs")
 	templateCmd.PersistentFlags().StringVarP(&insertionPoint, "insertAt", "p", ".spec.parameters[0]", "jq path within the template to insert backstage info")
-	templateCmd.PersistentFlags().BoolVarP(&collapsed, "collapse", "c", false, "if set to true, items are rendered and collapsed as drop down items in a single specified template")
-	templateCmd.PersistentFlags().BoolVarP(&raw, "raw", "", false, "prints the raw open API output without putting it into a template (ignoring `templatePath` and `insertAt`)")
+	templateCmd.PersistentFlags().BoolVarP(&collapsed, "colllapse", "c", false, "if set to true, items are rendered and collapsed as drop down items in a single specified template")
+	templateCmd.PersistentFlags().BoolVarP(&raw, "raww", "", false, "prints the raw open API output without putting it into a template (ignoring `templatePath` and `insertAt`)")
 
 	templateCmd.MarkFlagRequired("inputDir")
 	templateCmd.MarkFlagRequired("outputDir")
@@ -50,6 +54,82 @@ func templatePreRunE(cmd *cobra.Command, args []string) error {
 
 	if templatePath == "" && !raw {
 		return errors.New("you either need to use the `raw` flag to generate raw OpenAPI files or define a `templatePath` for the tool to populate.")
+	}
+
+	return nil
+}
+
+type EntityConfig struct {
+	InputDir       string
+	OutputDir      string
+	TemplateFile   string
+	OutputFile     string
+	InsertionPoint string
+	Defenitions    []string
+	Properties     map[string]models.BackstageParamFields
+	Required       []string
+	Collapsed      bool
+	Raw            bool
+}
+
+type EntryConfig struct {
+	Definitions    []string
+	ExpectedOutDir string
+	TemplateFile   string
+	InsertionPoint string
+	Collapsed      bool
+	Raw            bool
+}
+
+type ProcessOutput struct {
+	Templates []string
+	Resources []string
+}
+
+type Entity interface {
+	GetDefinitions(string, uint32) ([]string, error)
+	HandleEntries(context.Context, EntryConfig) (ProcessOutput, error)
+	Config() EntityConfig
+}
+
+func Process(ctx context.Context, p Entity) error {
+	c := p.Config()
+
+	expectedInDir, expectedOutDir, expectedTemplateFile, err := prepDirectories(
+		c.InputDir,
+		c.OutputDir,
+		c.TemplateFile,
+		c.Collapsed && !c.Raw, /* only generate nesting if needs to be collapsed and not be raw*/
+	)
+	if err != nil {
+		return err
+	}
+
+	defs, err := p.GetDefinitions(expectedInDir, 0)
+	if err != nil {
+		return err
+	}
+	log.Printf("processing %d definitions", len(defs))
+
+	output, err := p.HandleEntries(ctx, EntryConfig{
+		Definitions:    defs,
+		ExpectedOutDir: expectedOutDir,
+		TemplateFile:   expectedTemplateFile,
+		InsertionPoint: c.InsertionPoint,
+		Collapsed:      c.Collapsed,
+		Raw:            c.Raw,
+	})
+	if err != nil {
+		return err
+	}
+
+	if c.Collapsed && !c.Raw {
+		generatedTemplateFile := filepath.Join(expectedOutDir, "../template.yaml")
+		input := insertAtInput{
+			templatePath:     expectedTemplateFile,
+			jqPathExpression: c.InsertionPoint,
+		}
+		return writeOneOf(ctx, input, generatedTemplateFile, output.Templates)
 	}
 
 	return nil

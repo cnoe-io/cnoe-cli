@@ -47,82 +47,67 @@ var (
 	}
 )
 
-type cmdOutput struct {
-	Templates []string
-	Resources []string
-}
-
 func crd(cmd *cobra.Command, args []string) error {
-	return Crd(
+	return Process(
 		cmd.Context(),
-		inputDir, outputDir, templatePath, insertionPoint, collapsed, raw,
-		verifiers, templateName, templateTitle, templateDescription,
+		NewCRDModule(
+			inputDir, outputDir, templatePath, insertionPoint, collapsed, raw,
+			verifiers, templateName, templateTitle, templateDescription,
+		),
 	)
 }
 
-func Crd(
-	ctx context.Context, inputDir, outputDir, templatePath, insertionPoint string, collapsed, raw bool,
+type CRDModule struct {
+	EntityConfig
+	verifiers           []string
+	templateName        string
+	templateTitle       string
+	templateDescription string
+}
+
+func NewCRDModule(
+	inputDir, outputDir, templatePath, insertionPoint string, collapsed, raw bool,
 	verifiers []string, templateName, templateTitle, templateDescription string,
-) error {
-	inDir, expectedOutDir, template, err := prepDirectories(
-		inputDir,
-		outputDir,
-		templatePath,
-		collapsed && !raw /* only generate nesting if needs to be collapsed and not be raw*/)
-	if err != nil {
-		return err
+) Entity {
+	return &CRDModule{
+		EntityConfig: EntityConfig{
+			InputDir:       inputDir,
+			OutputDir:      outputDir,
+			TemplateFile:   templatePath,
+			InsertionPoint: insertionPoint,
+			Collapsed:      collapsed,
+			Raw:            raw,
+		},
+		verifiers:           verifiers,
+		templateName:        templateName,
+		templateTitle:       templateTitle,
+		templateDescription: templateDescription,
 	}
-
-	defs, err := getDefs(inDir, 0)
-	if err != nil {
-		return err
-	}
-	log.Printf("processing %d definitions", len(defs))
-
-	output, err := writeSchema(
-		ctx,
-		expectedOutDir,
-		insertionPoint,
-		template,
-		defs,
-		collapsed,
-		raw,
-	)
-	if err != nil {
-		return err
-	}
-
-	if collapsed && !raw {
-		templateFile := filepath.Join(expectedOutDir, "../template.yaml")
-		input := insertAtInput{
-			templatePath:     template,
-			jqPathExpression: insertionPoint,
-		}
-		return writeOneOf(ctx, input, templateFile, output.Templates)
-	}
-
-	return nil
 }
 
-func getDefs(inputDir string, currentDepth uint32) ([]string, error) {
+func (c *CRDModule) Config() EntityConfig {
+	return c.EntityConfig
+}
+
+func (c *CRDModule) GetDefinitions(inputDir string, currentDepth uint32) ([]string, error) {
 	if currentDepth > depth {
 		return nil, nil
 	}
-	out, err := getRelevantFiles(inputDir, currentDepth, findDefs)
+	out, err := getRelevantFiles(inputDir, currentDepth, c.findDefs)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func findDefs(file os.DirEntry, currentDepth uint32, base string) ([]string, error) {
+func (c *CRDModule) findDefs(file os.DirEntry, currentDepth uint32, base string) ([]string, error) {
 	f := filepath.Join(base, file.Name())
 	stat, err := os.Stat(f)
 	if err != nil {
 		return nil, err
 	}
 	if stat.IsDir() {
-		df, err := getDefs(f, currentDepth+1)
+		df, err := c.GetDefinitions(f, currentDepth+1)
 		if err != nil {
 			return nil, err
 		}
@@ -131,28 +116,28 @@ func findDefs(file os.DirEntry, currentDepth uint32, base string) ([]string, err
 	return []string{f}, nil
 }
 
-func writeSchema(ctx context.Context, outputDir, insertionPoint, templateFile string, defs []string, collapsed, raw bool) (cmdOutput, error) {
-	out := cmdOutput{
+func (c *CRDModule) HandleEntries(ctx context.Context, cc EntryConfig) (ProcessOutput, error) {
+	out := ProcessOutput{
 		Templates: make([]string, 0),
 		Resources: make([]string, 0),
 	}
 
-	for _, def := range defs {
+	for _, def := range cc.Definitions {
 		converted, resourceName, err := convert(def)
 		if err != nil {
 			var e NotSupported
 			if errors.As(err, &e) {
 				continue
 			}
-			return cmdOutput{}, err
+			return ProcessOutput{}, err
 		}
 
-		filename := filepath.Join(outputDir, fmt.Sprintf("%s.yaml", strings.ToLower(resourceName)))
+		filename := filepath.Join(cc.ExpectedOutDir, fmt.Sprintf("%s.yaml", strings.ToLower(resourceName)))
 
-		if !collapsed && !raw {
+		if !cc.Collapsed && !cc.Raw {
 			input := insertAtInput{
-				templatePath:     templateFile,
-				jqPathExpression: insertionPoint,
+				templatePath:     cc.TemplateFile,
+				jqPathExpression: cc.InsertionPoint,
 			}
 			props := converted.(map[string]any)
 			if v, reqOk := props["required"]; reqOk {
@@ -163,7 +148,7 @@ func writeSchema(ctx context.Context, outputDir, insertionPoint, templateFile st
 			input.fields = props
 			t, err := insertAt(ctx, input)
 			if err != nil {
-				return cmdOutput{}, err
+				return ProcessOutput{}, err
 			}
 			converted = t
 		}
@@ -171,7 +156,7 @@ func writeSchema(ctx context.Context, outputDir, insertionPoint, templateFile st
 		err = writeOutput(converted, filename)
 		if err != nil {
 			log.Printf("failed to write %s: %s \n", def, err.Error())
-			return cmdOutput{}, err
+			return ProcessOutput{}, err
 		}
 		out.Templates = append(out.Templates, filename)
 		out.Resources = append(out.Resources, resourceName)
@@ -215,7 +200,7 @@ func convert(def string) (any, string, error) {
 	} else {
 		value, err = ConvertMap(v)
 		if err != nil {
-			return cmdOutput{}, "", err
+			return ProcessOutput{}, "", err
 		}
 	}
 
