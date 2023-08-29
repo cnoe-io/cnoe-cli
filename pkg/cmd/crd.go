@@ -132,37 +132,40 @@ func (c *CRDModule) HandleEntries(ctx context.Context, cc EntryConfig) (ProcessO
 			return ProcessOutput{}, err
 		}
 
-		filename := filepath.Join(cc.ExpectedOutDir, fmt.Sprintf("%s.yaml", strings.ToLower(resourceName)))
-
-		if !c.Collapsed && !c.Raw {
-			input := insertAtInput{
-				templatePath:     cc.TemplateFile,
-				jqPathExpression: c.InsertionPoint,
-			}
-			props := converted.(map[string]any)
-			if v, reqOk := props["required"]; reqOk {
-				if reqs, ok := v.([]string); ok {
-					input.required = reqs
-				}
-			}
-			input.fields = props
-			t, err := insertAt(ctx, input)
-			if err != nil {
-				return ProcessOutput{}, err
-			}
-			converted = t
-		}
-
-		err = writeOutput(converted, filename)
+		fileName := filepath.Join(cc.ExpectedOutDir, fmt.Sprintf("%s.yaml", strings.ToLower(resourceName)))
+		c.handleModuleOuptut(ctx, converted, fileName, cc.TemplateFile)
 		if err != nil {
 			log.Printf("failed to write %s: %s \n", def, err.Error())
 			return ProcessOutput{}, err
 		}
-		out.Templates = append(out.Templates, filename)
+		out.Templates = append(out.Templates, fileName)
 		out.Resources = append(out.Resources, resourceName)
 	}
 
 	return out, nil
+}
+
+func (c *CRDModule) handleModuleOuptut(ctx context.Context, converted any, outputFile, templateFile string) error {
+	if !c.Collapsed && !c.Raw {
+		input := insertAtInput{
+			templatePath:     templateFile,
+			jqPathExpression: c.InsertionPoint,
+		}
+		props := converted.(map[string]any)
+		if v, reqOk := props["required"]; reqOk {
+			if reqs, ok := v.([]string); ok {
+				input.required = reqs
+			}
+		}
+		input.fields = props
+		converted, err := insertAt(ctx, input)
+		if err != nil {
+			return err
+		}
+		return writeOutput(converted, outputFile)
+	}
+
+	return writeOutput(converted, outputFile)
 }
 
 func convert(def string) (any, string, error) {

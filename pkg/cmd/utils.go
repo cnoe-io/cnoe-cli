@@ -81,7 +81,7 @@ func prepDirectories(inputDir, outputDir, templateFile string, oneOf bool) (stri
 
 // Use the given template file, add dependencies and enum fields at the object specified by insertionPoint.
 // Write the result to a file specified by outputFile.
-func writeOneOf(ctx context.Context, input insertAtInput, outputFile string, resourceFiles []string) error {
+func writeCollapsedTemplate(ctx context.Context, input insertAtInput, outputFile string, resourceFiles []string) error {
 
 	t, err := oneOf(ctx, resourceFiles, input)
 	if err != nil {

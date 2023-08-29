@@ -120,7 +120,7 @@ func Process(ctx context.Context, p Entity) error {
 			templatePath:     expectedTemplateFile,
 			jqPathExpression: c.InsertionPoint,
 		}
-		return writeOneOf(ctx, input, generatedTemplateFile, output.Templates)
+		return writeCollapsedTemplate(ctx, input, generatedTemplateFile, output.Templates)
 	}
 
 	return nil

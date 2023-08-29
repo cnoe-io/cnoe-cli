@@ -62,15 +62,15 @@ func (t *TerraformModule) HandleEntries(ctx context.Context, c EntryConfig) (Pro
 		Resources: make([]string, 0),
 	}
 
-	for _, path := range c.Definitions {
-		log.Printf("processing module at %s", path)
-		mod, diag := tfconfig.LoadModule(path)
+	for _, def := range c.Definitions {
+		log.Printf("processing module at %s", def)
+		mod, diag := tfconfig.LoadModule(def)
 		if diag.HasErrors() {
 			return out, diag.Err()
 		}
 
 		if len(mod.Variables) == 0 {
-			log.Printf("module %s does not have variables", path)
+			log.Printf("module %s does not have variables", def)
 			continue
 		}
 
@@ -83,10 +83,10 @@ func (t *TerraformModule) HandleEntries(ctx context.Context, c EntryConfig) (Pro
 			}
 		}
 
-		fileName := fmt.Sprintf("%s.yaml", filepath.Base(path))
-		outputFile := filepath.Join(c.ExpectedOutDir, fileName)
-		err := handleModuleOutput(ctx, outputFile, c.TemplateFile, t.InsertionPoint, params, required, t.Collapsed, t.Raw)
+		fileName := filepath.Join(c.ExpectedOutDir, fmt.Sprintf("%s.yaml", filepath.Base(def)))
+		err := t.handleModuleOutput(ctx, fileName, c.TemplateFile, params, required)
 		if err != nil {
+			log.Printf("failed to write %s: %s \n", def, err.Error())
 			return ProcessOutput{}, err
 		}
 
@@ -96,35 +96,30 @@ func (t *TerraformModule) HandleEntries(ctx context.Context, c EntryConfig) (Pro
 	return out, nil
 }
 
-func handleModuleOutput(ctx context.Context, outputFile, templateFile, insertionPoint string, properties map[string]models.BackstageParamFields, required []string, collapsed, raw bool) error {
-	props := make(map[string]interface{}, len(properties))
-	for k := range properties {
-		props[k] = properties[k]
-	}
-
-	if !raw && !collapsed {
+func (t *TerraformModule) handleModuleOutput(ctx context.Context, outputFile, templateFile string, properties map[string]models.BackstageParamFields, required []string) error {
+	if !t.Raw && !t.Collapsed {
 		input := insertAtInput{
-			templatePath:     templateFile,
+			templatePath:     t.TemplateFile,
 			jqPathExpression: insertionPoint,
 			fields: map[string]interface{}{
-				"properties": props,
+				"properties": properties,
 			},
 		}
 		if len(required) > 0 {
 			input.required = required
 		}
-		t, err := insertAt(ctx, input)
+		content, err := insertAt(ctx, input)
 		if err != nil {
 			return fmt.Errorf("failed to insert to given template: %s", err)
 		}
-		return writeOutput(t, outputFile)
+		return writeOutput(content, outputFile)
 	}
 
-	t := map[string]interface{}{
-		"properties": props,
+	content := map[string]interface{}{
+		"properties": properties,
 		"required":   required,
 	}
-	return writeOutput(t, outputFile)
+	return writeOutput(content, outputFile)
 }
 
 func (t *TerraformModule) GetDefinitions(inputDir string, currentDepth uint32) ([]string, error) {
