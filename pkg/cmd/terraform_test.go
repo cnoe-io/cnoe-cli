@@ -3,6 +3,7 @@ package cmd_test
 import (
 	"context"
 	"fmt"
+	"log"
 
 	"os"
 	"path/filepath"
@@ -10,12 +11,15 @@ import (
 	"github.com/cnoe-io/cnoe-cli/pkg/cmd"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"github.com/onsi/gomega/gbytes"
 )
 
 var _ = Describe("Terraform Template", func() {
 	var (
 		tempDir   string
 		outputDir string
+
+		stdout *gbytes.Buffer
 	)
 
 	const (
@@ -37,6 +41,9 @@ var _ = Describe("Terraform Template", func() {
 		outputDir = filepath.Join(tempDir, "output")
 		err = os.Mkdir(outputDir, 0755)
 		Expect(err).NotTo(HaveOccurred())
+
+		stdout = gbytes.NewBuffer()
+		log.SetOutput(stdout)
 	})
 
 	AfterEach(func() {

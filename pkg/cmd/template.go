@@ -6,7 +6,6 @@ import (
 	"log"
 	"path/filepath"
 
-	"github.com/cnoe-io/cnoe-cli/pkg/models"
 	"github.com/spf13/cobra"
 )
 
@@ -66,8 +65,6 @@ type EntityConfig struct {
 	OutputFile     string
 	InsertionPoint string
 	Defenitions    []string
-	Properties     map[string]models.BackstageParamFields
-	Required       []string
 	Collapsed      bool
 	Raw            bool
 }
@@ -76,9 +73,6 @@ type EntryConfig struct {
 	Definitions    []string
 	ExpectedOutDir string
 	TemplateFile   string
-	InsertionPoint string
-	Collapsed      bool
-	Raw            bool
 }
 
 type ProcessOutput struct {
@@ -115,9 +109,6 @@ func Process(ctx context.Context, p Entity) error {
 		Definitions:    defs,
 		ExpectedOutDir: expectedOutDir,
 		TemplateFile:   expectedTemplateFile,
-		InsertionPoint: c.InsertionPoint,
-		Collapsed:      c.Collapsed,
-		Raw:            c.Raw,
 	})
 	if err != nil {
 		return err

@@ -134,10 +134,10 @@ func (c *CRDModule) HandleEntries(ctx context.Context, cc EntryConfig) (ProcessO
 
 		filename := filepath.Join(cc.ExpectedOutDir, fmt.Sprintf("%s.yaml", strings.ToLower(resourceName)))
 
-		if !cc.Collapsed && !cc.Raw {
+		if !c.Collapsed && !c.Raw {
 			input := insertAtInput{
 				templatePath:     cc.TemplateFile,
-				jqPathExpression: cc.InsertionPoint,
+				jqPathExpression: c.InsertionPoint,
 			}
 			props := converted.(map[string]any)
 			if v, reqOk := props["required"]; reqOk {
@@ -277,7 +277,7 @@ func ConvertMap(originalData interface{}) (map[string]interface{}, error) {
 			var err error
 			convertedMap[key], err = ConvertMap(v)
 			if err != nil {
-				return nil, errors.New(fmt.Sprintf("failed to convert for key %s", key))
+				return nil, fmt.Errorf("failed to convert for key %s", key)
 			}
 		case int:
 			convertedMap[key] = int64(v)
@@ -290,7 +290,7 @@ func ConvertMap(originalData interface{}) (map[string]interface{}, error) {
 				case map[interface{}]interface{}:
 					ivec, err := ConvertMap(ive)
 					if err != nil {
-						return nil, errors.New(fmt.Sprintf("failed to convert for key %s", key))
+						return nil, fmt.Errorf("failed to convert for key %s", key)
 					}
 					dv[i] = ivec
 				case int:

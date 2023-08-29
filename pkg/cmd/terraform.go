@@ -40,7 +40,6 @@ type TerraformModule struct {
 }
 
 func NewTerraformModule(inputDir, outputDir, templatePath, insertionPoint string, collapsed, raw bool) Entity {
-
 	return &TerraformModule{
 		EntityConfig: EntityConfig{
 			InputDir:       inputDir,
@@ -63,8 +62,7 @@ func (t *TerraformModule) HandleEntries(ctx context.Context, c EntryConfig) (Pro
 		Resources: make([]string, 0),
 	}
 
-	for i := range c.Definitions {
-		path := c.Definitions[i]
+	for _, path := range c.Definitions {
 		log.Printf("processing module at %s", path)
 		mod, diag := tfconfig.LoadModule(path)
 		if diag.HasErrors() {
@@ -76,11 +74,18 @@ func (t *TerraformModule) HandleEntries(ctx context.Context, c EntryConfig) (Pro
 			continue
 		}
 
-		params, required := prepareParamsAndRequired(mod)
+		params := make(map[string]models.BackstageParamFields)
+		required := make([]string, 0)
+		for j := range mod.Variables {
+			params[j] = convertVariable(*mod.Variables[j])
+			if mod.Variables[j].Required {
+				required = append(required, j)
+			}
+		}
 
 		fileName := fmt.Sprintf("%s.yaml", filepath.Base(path))
 		outputFile := filepath.Join(c.ExpectedOutDir, fileName)
-		err := handleModuleOutput(ctx, outputFile, c.TemplateFile, c.InsertionPoint, params, required, c.Collapsed, c.Raw)
+		err := handleModuleOutput(ctx, outputFile, c.TemplateFile, t.InsertionPoint, params, required, t.Collapsed, t.Raw)
 		if err != nil {
 			return ProcessOutput{}, err
 		}
@@ -89,18 +94,6 @@ func (t *TerraformModule) HandleEntries(ctx context.Context, c EntryConfig) (Pro
 	}
 
 	return out, nil
-}
-
-func prepareParamsAndRequired(mod *tfconfig.Module) (map[string]models.BackstageParamFields, []string) {
-	params := make(map[string]models.BackstageParamFields)
-	required := make([]string, 0)
-	for j := range mod.Variables {
-		params[j] = convertVariable(*mod.Variables[j])
-		if mod.Variables[j].Required {
-			required = append(required, j)
-		}
-	}
-	return params, required
 }
 
 func handleModuleOutput(ctx context.Context, outputFile, templateFile, insertionPoint string, properties map[string]models.BackstageParamFields, required []string, collapsed, raw bool) error {
@@ -128,35 +121,6 @@ func handleModuleOutput(ctx context.Context, outputFile, templateFile, insertion
 	}
 
 	t := map[string]interface{}{
-		"properties": props,
-		"required":   required,
-	}
-	return writeOutput(t, outputFile)
-}
-
-func handleOutput(ctx context.Context, outputFile, templateFile, insertionPoint string, properties map[string]models.BackstageParamFields, required []string, collapsed, raw bool) error {
-	props := make(map[string]any, len(properties))
-	for k := range properties {
-		props[k] = properties[k]
-	}
-	if !raw && !collapsed {
-		input := insertAtInput{
-			templatePath:     templateFile,
-			jqPathExpression: insertionPoint,
-			fields: map[string]any{
-				"properties": props,
-			},
-		}
-		if len(required) > 0 {
-			input.required = required
-		}
-		t, err := insertAt(ctx, input)
-		if err != nil {
-			return fmt.Errorf("failed to insert to given template: %s", err)
-		}
-		return writeOutput(t, outputFile)
-	}
-	t := map[string]any{
 		"properties": props,
 		"required":   required,
 	}
@@ -239,27 +203,6 @@ func convertArray(tfVar tfconfig.Variable) models.BackstageParamFields {
 	return out
 }
 
-func convertObjectDefaults(tfVar tfconfig.Variable) map[string]*models.BackstageParamFields {
-	// build default values by taking default's key and type. Must be done for primitives only.
-	properties := make(map[string]*models.BackstageParamFields)
-	nestedType := getNestedType(cleanString(tfVar.Type))
-	if tfVar.Default != nil {
-		d, ok := tfVar.Default.(map[string]any)
-		if !ok {
-			log.Fatalf("could not determine default type of %s\n", tfVar.Default)
-		}
-		for k := range d {
-			defaultProp := convertVariable(tfconfig.Variable{
-				Name:    k,
-				Type:    nestedType,
-				Default: d[k],
-			})
-			properties[k] = &defaultProp
-		}
-	}
-	return properties
-}
-
 func convertObject(tfVar tfconfig.Variable) models.BackstageParamFields {
 	out := models.BackstageParamFields{
 		Title:       tfVar.Name,
@@ -297,14 +240,6 @@ func cleanString(input string) string {
 
 func isPrimitive(s string) bool {
 	return s == "string" || s == "number" || s == "bool"
-}
-
-func isNestedPrimitive(s string) bool {
-	nested := strings.HasPrefix(s, "object(") || strings.HasPrefix(s, "map(") || strings.HasPrefix(s, "list(")
-	if nested {
-		return isPrimitive(getNestedType(s))
-	}
-	return false
 }
 
 func getNestedType(s string) string {
