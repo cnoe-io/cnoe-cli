@@ -48,11 +48,11 @@ func templatePreRunE(cmd *cobra.Command, args []string) error {
 	}
 
 	if collapsed && templatePath == "" && !raw {
-		return errors.New("templatePath flag must be specified when using the `collapse` flag (optionally you can use `insertAt` as well.)")
+		return errors.New("templatePath flag must be specified when using the `collapse` flag (optionally you can use `insertAt` as well)")
 	}
 
 	if templatePath == "" && !raw {
-		return errors.New("you either need to use the `raw` flag to generate raw OpenAPI files or define a `templatePath` for the tool to populate.")
+		return errors.New("you either need to use the `raw` flag to generate raw OpenAPI files or define a `templatePath` for the tool to populate")
 	}
 
 	return nil
@@ -69,20 +69,9 @@ type EntityConfig struct {
 	Raw            bool
 }
 
-type EntryConfig struct {
-	Definitions    []string
-	ExpectedOutDir string
-	TemplateFile   string
-}
-
-type ProcessOutput struct {
-	Templates []string
-	Resources []string
-}
-
 type Entity interface {
 	GetDefinitions(string, uint32) ([]string, error)
-	HandleEntries(context.Context, EntryConfig) (ProcessOutput, error)
+	HandleEntry(context.Context, string, string, string) (any, string, error)
 	Config() EntityConfig
 }
 
@@ -93,34 +82,42 @@ func Process(ctx context.Context, p Entity) error {
 		c.InputDir,
 		c.OutputDir,
 		c.TemplateFile,
-		c.Collapsed && !c.Raw, /* only generate nesting if needs to be collapsed and not be raw*/
+		c.Collapsed && !c.Raw, /* only generate nesting if templates need to collapse and not printed as raw*/
 	)
 	if err != nil {
 		return err
 	}
 
-	defs, err := p.GetDefinitions(expectedInDir, 0)
+	definitions, err := p.GetDefinitions(expectedInDir, 0)
 	if err != nil {
 		return err
 	}
-	log.Printf("processing %d definitions", len(defs))
+	log.Printf("processing %d definitions", len(definitions))
 
-	output, err := p.HandleEntries(ctx, EntryConfig{
-		Definitions:    defs,
-		ExpectedOutDir: expectedOutDir,
-		TemplateFile:   expectedTemplateFile,
-	})
-	if err != nil {
-		return err
+	templateOutputFiles := make([]string, 0)
+
+	for _, def := range definitions {
+		content, contentFileName, err := p.HandleEntry(ctx, def, expectedOutDir, expectedTemplateFile)
+		if err != nil {
+			return err
+		}
+		if content != nil { // write the content and record the file name
+			err = writeOutput(content, contentFileName)
+			if err != nil {
+				log.Printf("wrinting content failed for %s", contentFileName)
+				continue
+			}
+			templateOutputFiles = append(templateOutputFiles, contentFileName)
+		}
 	}
 
-	if c.Collapsed && !c.Raw {
+	if shouldCreateCollapsedTemplate(p) && len(templateOutputFiles) > 0 {
 		generatedTemplateFile := filepath.Join(expectedOutDir, "../template.yaml")
 		input := insertAtInput{
 			templatePath:     expectedTemplateFile,
 			jqPathExpression: c.InsertionPoint,
 		}
-		return writeCollapsedTemplate(ctx, input, generatedTemplateFile, output.Templates)
+		return writeCollapsedTemplate(ctx, input, generatedTemplateFile, templateOutputFiles)
 	}
 
 	return nil

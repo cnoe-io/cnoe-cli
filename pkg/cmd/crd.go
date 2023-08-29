@@ -116,37 +116,29 @@ func (c *CRDModule) findDefs(file os.DirEntry, currentDepth uint32, base string)
 	return []string{f}, nil
 }
 
-func (c *CRDModule) HandleEntries(ctx context.Context, cc EntryConfig) (ProcessOutput, error) {
-	out := ProcessOutput{
-		Templates: make([]string, 0),
-		Resources: make([]string, 0),
+func (c *CRDModule) HandleEntry(ctx context.Context, def, expectedOutDir, templateFile string) (any, string, error) {
+	log.Printf("processing resource at %s", def)
+	converted, resourceName, err := convert(def)
+	if err != nil {
+		var e NotSupported
+		if errors.As(err, &e) {
+			return nil, "", nil
+		}
+		return nil, "", err
 	}
 
-	for _, def := range cc.Definitions {
-		converted, resourceName, err := convert(def)
-		if err != nil {
-			var e NotSupported
-			if errors.As(err, &e) {
-				continue
-			}
-			return ProcessOutput{}, err
-		}
-
-		fileName := filepath.Join(cc.ExpectedOutDir, fmt.Sprintf("%s.yaml", strings.ToLower(resourceName)))
-		c.handleModuleOuptut(ctx, converted, fileName, cc.TemplateFile)
-		if err != nil {
-			log.Printf("failed to write %s: %s \n", def, err.Error())
-			return ProcessOutput{}, err
-		}
-		out.Templates = append(out.Templates, fileName)
-		out.Resources = append(out.Resources, resourceName)
+	fileName := filepath.Join(expectedOutDir, fmt.Sprintf("%s.yaml", strings.ToLower(resourceName)))
+	content, err := c.createContent(ctx, converted, templateFile)
+	if err != nil {
+		log.Printf("failed to write %s: %s \n", def, err.Error())
+		return nil, "", err
 	}
 
-	return out, nil
+	return content, fileName, nil
 }
 
-func (c *CRDModule) handleModuleOuptut(ctx context.Context, converted any, outputFile, templateFile string) error {
-	if !c.Collapsed && !c.Raw {
+func (c *CRDModule) createContent(ctx context.Context, converted any, templateFile string) (any, error) {
+	if shouldCreateNonCollapsedTemplate(c) {
 		input := insertAtInput{
 			templatePath:     templateFile,
 			jqPathExpression: c.InsertionPoint,
@@ -160,12 +152,12 @@ func (c *CRDModule) handleModuleOuptut(ctx context.Context, converted any, outpu
 		input.fields = props
 		converted, err := insertAt(ctx, input)
 		if err != nil {
-			return err
+			return nil, err
 		}
-		return writeOutput(converted, outputFile)
+		return converted, nil
 	}
 
-	return writeOutput(converted, outputFile)
+	return converted, nil
 }
 
 func convert(def string) (any, string, error) {
@@ -203,7 +195,7 @@ func convert(def string) (any, string, error) {
 	} else {
 		value, err = ConvertMap(v)
 		if err != nil {
-			return ProcessOutput{}, "", err
+			return nil, "", err
 		}
 	}
 

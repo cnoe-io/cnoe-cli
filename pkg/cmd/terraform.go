@@ -56,48 +56,39 @@ func (t *TerraformModule) Config() EntityConfig {
 	return t.EntityConfig
 }
 
-func (t *TerraformModule) HandleEntries(ctx context.Context, c EntryConfig) (ProcessOutput, error) {
-	out := ProcessOutput{
-		Templates: make([]string, 0),
-		Resources: make([]string, 0),
+func (t *TerraformModule) HandleEntry(ctx context.Context, def, expectedOutDir, templateFile string) (any, string, error) {
+	log.Printf("processing module at %s", def)
+	mod, diag := tfconfig.LoadModule(def)
+	if diag.HasErrors() {
+		return nil, "", diag.Err()
 	}
 
-	for _, def := range c.Definitions {
-		log.Printf("processing module at %s", def)
-		mod, diag := tfconfig.LoadModule(def)
-		if diag.HasErrors() {
-			return out, diag.Err()
-		}
-
-		if len(mod.Variables) == 0 {
-			log.Printf("module %s does not have variables", def)
-			continue
-		}
-
-		params := make(map[string]models.BackstageParamFields)
-		required := make([]string, 0)
-		for j := range mod.Variables {
-			params[j] = convertVariable(*mod.Variables[j])
-			if mod.Variables[j].Required {
-				required = append(required, j)
-			}
-		}
-
-		fileName := filepath.Join(c.ExpectedOutDir, fmt.Sprintf("%s.yaml", filepath.Base(def)))
-		err := t.handleModuleOutput(ctx, fileName, c.TemplateFile, params, required)
-		if err != nil {
-			log.Printf("failed to write %s: %s \n", def, err.Error())
-			return ProcessOutput{}, err
-		}
-
-		out.Templates = append(out.Templates, fileName)
+	if len(mod.Variables) == 0 {
+		log.Printf("module %s does not have variables", def)
+		return nil, "", nil
 	}
 
-	return out, nil
+	params := make(map[string]models.BackstageParamFields)
+	required := make([]string, 0)
+	for j := range mod.Variables {
+		params[j] = convertVariable(*mod.Variables[j])
+		if mod.Variables[j].Required {
+			required = append(required, j)
+		}
+	}
+
+	fileName := filepath.Join(expectedOutDir, fmt.Sprintf("%s.yaml", filepath.Base(def)))
+	content, err := t.createContent(ctx, templateFile, params, required)
+	if err != nil {
+		log.Printf("failed to write %s: %s \n", def, err.Error())
+		return nil, "", err
+	}
+
+	return content, fileName, nil
 }
 
-func (t *TerraformModule) handleModuleOutput(ctx context.Context, outputFile, templateFile string, properties map[string]models.BackstageParamFields, required []string) error {
-	if !t.Raw && !t.Collapsed {
+func (t *TerraformModule) createContent(ctx context.Context, templateFile string, properties map[string]models.BackstageParamFields, required []string) (any, error) {
+	if shouldCreateNonCollapsedTemplate(t) {
 		input := insertAtInput{
 			templatePath:     t.TemplateFile,
 			jqPathExpression: insertionPoint,
@@ -110,16 +101,16 @@ func (t *TerraformModule) handleModuleOutput(ctx context.Context, outputFile, te
 		}
 		content, err := insertAt(ctx, input)
 		if err != nil {
-			return fmt.Errorf("failed to insert to given template: %s", err)
+			return nil, fmt.Errorf("failed to insert to given template: %s", err)
 		}
-		return writeOutput(content, outputFile)
+		return content, nil
 	}
 
 	content := map[string]interface{}{
 		"properties": properties,
 		"required":   required,
 	}
-	return writeOutput(content, outputFile)
+	return content, nil
 }
 
 func (t *TerraformModule) GetDefinitions(inputDir string, currentDepth uint32) ([]string, error) {

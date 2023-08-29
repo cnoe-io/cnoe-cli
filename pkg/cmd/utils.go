@@ -199,3 +199,11 @@ func getRelevantFiles(inputDir string, currentDepth uint32, f finder) ([]string,
 	}
 	return out, nil
 }
+
+func shouldCreateCollapsedTemplate(p Entity) bool {
+	return p.Config().Collapsed && !p.Config().Raw
+}
+
+func shouldCreateNonCollapsedTemplate(p Entity) bool {
+	return !p.Config().Collapsed && !p.Config().Raw
+}
