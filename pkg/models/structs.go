@@ -23,6 +23,7 @@ type Spec struct {
 			} `yaml:"openAPIV3Schema"`
 		} `json:"schema"`
 	} `json:"versions"`
+	Scope string
 }
 
 type Definition struct {
@@ -51,31 +52,18 @@ type Wrapper struct {
 	Properties Props `json:"properties"`
 }
 
-type Template struct {
-	ApiVersion string `yaml:"apiVersion"`
-	Kind       string `yaml:"kind"`
-	Metadata   struct {
-		Name        string `yaml:"name"`
-		Title       string `yaml:"title"`
-		Description string `yaml:"description"`
-	} `yaml:"metadata"`
-	Spec struct {
-		Owner      string `yaml:"owner"`
-		Type       string `yaml:"type"`
-		Parameters []struct {
-			Properties   map[string]interface{} `yaml:"properties"`
-			Dependencies struct {
-				Resources struct {
-					OneOf []map[string]interface{} `yaml:"oneOf,omitempty"`
-				} `yaml:"resources,omitempty"`
-			} `yaml:"dependencies,omitempty"`
-		} `yaml:"parameters"`
+type BackstageParamFields struct {
+	Title                string `yaml:",omitempty"`
+	Type                 string
+	Description          string                           `yaml:",omitempty"`
+	Default              any                              `yaml:",omitempty"`
+	Items                *BackstageParamFields            `yaml:",omitempty"`
+	UIWidget             string                           `yaml:"ui:widget,omitempty"`
+	Properties           map[string]*BackstageParamFields `yaml:"UiWidget,omitempty"`
+	AdditionalProperties *AdditionalProperties            `yaml:"additionalProperties,omitempty"`
+	UniqueItems          *bool                            `yaml:",omitempty"` // This does not guarantee a set. Works for primitives only.
+}
 
-		Steps []struct {
-			Id     string                 `yaml:"id"`
-			Name   string                 `yaml:"name"`
-			Action string                 `yaml:"action"`
-			Input  map[string]interface{} `yaml:"input"`
-		} `yaml:"steps"`
-	} `yaml:"spec"`
+type AdditionalProperties struct { // technically any but for our case, it should be a type: string
+	Type string `yaml:",omitempty"`
 }

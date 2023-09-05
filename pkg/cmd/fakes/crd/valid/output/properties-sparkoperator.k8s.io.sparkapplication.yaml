@@ -3,9 +3,6 @@ properties:
     default: sparkoperator.k8s.io/v1beta2
     description: APIVersion for the resource
     type: string
-  awsResources:
-    enum:
-    - sparkoperator.k8s.io.SparkApplication
   config:
     properties:
       arguments:
@@ -23,8 +20,8 @@ properties:
           resources:
             additionalProperties:
               anyOf:
-              - type: integer
-              - type: string
+                - type: integer
+                - type: string
               pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
               x-kubernetes-int-or-string: true
             type: object
@@ -33,4 +30,8 @@ properties:
   kind:
     default: SparkApplication
     description: Kind for the resource
+    type: string
+  namespace:
+    description: Namespace for the resource
+    namespace: default
     type: string
