@@ -36,7 +36,7 @@ func init() {
 	templateCmd.PersistentFlags().Uint32Var(&depth, "depth", 2, "depth from given directory to search for TF modules or CRDs")
 	templateCmd.PersistentFlags().StringVarP(&insertionPoint, "insertAt", "p", ".spec.parameters[0]", "jq path within the template to insert backstage info")
 	templateCmd.PersistentFlags().BoolVarP(&collapsed, "colllapse", "c", false, "if set to true, items are rendered and collapsed as drop down items in a single specified template")
-	templateCmd.PersistentFlags().BoolVarP(&raw, "raww", "", false, "prints the raw open API output without putting it into a template (ignoring `templatePath` and `insertAt`)")
+	templateCmd.PersistentFlags().BoolVarP(&raw, "raw", "", false, "prints the raw open API output without putting it into a template (ignoring `templatePath` and `insertAt`)")
 
 	templateCmd.MarkFlagRequired("inputDir")
 	templateCmd.MarkFlagRequired("outputDir")
