@@ -10,7 +10,7 @@ spec:
     - dependencies:
         resources:
           oneOf:
-            - $yaml: resources/awsblueprints.io.xcdn.yaml
+            - $yaml: resources/awsblueprints.io.cdn.yaml
             - $yaml: resources/sparkoperator.k8s.io.sparkapplication.yaml
       description: Select a AWS resource to add to your repository.
       properties:
@@ -23,7 +23,7 @@ spec:
           type: string
         resources:
           enum:
-            - awsblueprints.io.xcdn
+            - awsblueprints.io.cdn
             - sparkoperator.k8s.io.sparkapplication
           type: string
       required:
