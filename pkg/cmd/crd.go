@@ -118,7 +118,7 @@ func (c *CRDModule) findDefs(file os.DirEntry, currentDepth uint32, base string)
 
 func (c *CRDModule) HandleEntry(ctx context.Context, def, expectedOutDir, templateFile string) (any, string, error) {
 	log.Printf("processing resource at %s", def)
-	converted, resourceName, err := convert(def)
+	converted, resourceName, err := c.convert(def)
 	if err != nil {
 		var e NotSupported
 		if errors.As(err, &e) {
@@ -160,7 +160,7 @@ func (c *CRDModule) createContent(ctx context.Context, converted any, templateFi
 	return converted, nil
 }
 
-func convert(def string) (any, string, error) {
+func (c *CRDModule) convert(def string) (any, string, error) {
 	data, err := os.ReadFile(def)
 	if err != nil {
 		return nil, "", err
@@ -202,6 +202,11 @@ func convert(def string) (any, string, error) {
 	obj := &unstructured.Unstructured{
 		Object: make(map[string]interface{}, 0),
 	}
+
+	if shouldCreateCollapsedTemplate(c) {
+		unstructured.SetNestedSlice(obj.Object, ConvertSlice([]string{strings.ToLower(resourceName)}), "properties", "resources", "enum")
+	}
+
 	unstructured.SetNestedMap(obj.Object, value, "properties", "config")
 	unstructured.SetNestedField(obj.Object, fmt.Sprintf("%s configuration options", resourceName), "properties", "config", "title")
 

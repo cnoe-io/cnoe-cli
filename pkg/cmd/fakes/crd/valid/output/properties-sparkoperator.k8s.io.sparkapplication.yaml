@@ -35,3 +35,6 @@ properties:
     description: Namespace for the resource
     namespace: default
     type: string
+  resources:
+    enum:
+    - sparkoperator.k8s.io.sparkapplication

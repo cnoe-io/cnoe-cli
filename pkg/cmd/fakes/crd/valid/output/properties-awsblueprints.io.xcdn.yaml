@@ -46,3 +46,6 @@ properties:
     default: XCDN
     description: Kind for the resource
     type: string
+  resources:
+    enum:
+    - awsblueprints.io.xcdn
