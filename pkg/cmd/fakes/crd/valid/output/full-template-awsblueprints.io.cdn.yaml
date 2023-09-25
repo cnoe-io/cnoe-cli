@@ -15,6 +15,10 @@ spec:
           type: string
         config:
           properties:
+            minSize:
+              type: integer
+              default: 2
+              description: Min Size.
             resourceConfig:
               description: ResourceConfig defines general properties of this AWS resource.
               properties:
@@ -50,10 +54,10 @@ spec:
               type: object
           required:
             - resourceConfig
-          title: awsblueprints.io.XCDN configuration options
+          title: awsblueprints.io.CDN configuration options
           type: object
         kind:
-          default: XCDN
+          default: CDN
           description: Kind for the resource
           type: string
         name:

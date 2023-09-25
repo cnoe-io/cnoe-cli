@@ -23,6 +23,10 @@ spec:
           properties:
             spec:
               properties:
+                minSize:
+                  type: integer
+                  default: 2
+                  description: Min Size.
                 resourceConfig:
                   description: ResourceConfig defines general properties of this AWS
                     resource.

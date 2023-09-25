@@ -11,8 +11,8 @@ import (
 
 	"github.com/cnoe-io/cnoe-cli/pkg/models"
 	"github.com/spf13/cobra"
-	"gopkg.in/yaml.v3"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"sigs.k8s.io/yaml"
 )
 
 const (
@@ -182,7 +182,7 @@ func (c *CRDModule) convert(def string) (any, string, error) {
 
 	var resourceName string
 	if doc.Spec.ClaimNames != nil {
-		resourceName = doc.Spec.ClaimNames.Kind
+		resourceName = fmt.Sprintf("%s.%s", doc.Spec.Group, doc.Spec.ClaimNames.Kind)
 	} else {
 		resourceName = fmt.Sprintf("%s.%s", doc.Spec.Group, doc.Spec.Names.Kind)
 	}
@@ -218,10 +218,14 @@ func (c *CRDModule) convert(def string) (any, string, error) {
 			"default":     fmt.Sprintf("%s/%s", doc.Spec.Group, doc.Spec.Versions[0].Name),
 		},
 			"properties", "apiVersion")
+		kind := doc.Spec.Names.Kind
+		if doc.Spec.ClaimNames != nil {
+			kind = doc.Spec.ClaimNames.Kind
+		}
 		unstructured.SetNestedMap(obj.Object, map[string]interface{}{
 			"type":        "string",
 			"description": "Kind for the resource",
-			"default":     doc.Spec.Names.Kind,
+			"default":     kind,
 		},
 			"properties", "kind")
 	}
